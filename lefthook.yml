@@ -1,0 +1,41 @@
+pre-commit:
+  jobs:
+    - name: format
+      skip:
+        - rebase
+        - merge
+        - revert
+      group:
+        parallel: true
+        jobs:
+          - name: prettier
+            glob: "*.{yml,yaml}"
+            stage_fixed: true
+            run: npx prettier --write {staged_files}
+          - name: ruff
+            glob: "*.{py}"
+            stage_fixed: true
+            run: |
+              uv run ruff format {staged_files}
+              uv run ruff check --fix {staged_files}
+          - name: sort cspell file
+            glob: "cspell.json"
+            stage_fixed: true
+            script: "sort_cspell.sh"
+            runner: bash
+    - name: lint
+      skip:
+        - rebase
+        - merge
+        - revert
+      group:
+        parallel: true
+        jobs:
+          - name: ruff
+            glob: "*.py"
+            run: uv run ruff check {staged_files}
+          - name: prettier
+            glob: "*.{yml,yaml}"
+            run: npx prettier --check {staged_files}
+          - name: spell check
+            run: pnpm cspell lint --no-must-find-files --no-progress {staged_files}
