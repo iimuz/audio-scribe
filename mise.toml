@@ -3,6 +3,9 @@ ffmpeg = "7.1.1"
 node = "24.16.0"
 pnpm = "10.33.4"
 python = "3.11.15"
+shellcheck = "0.11.0"
+shfmt = "v3.13.1"
+"pipx:whisperx" = "v3.8.6"
 uv = "0.11.14"
 
 [env]

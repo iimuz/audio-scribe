@@ -1,138 +1,278 @@
 #!/usr/bin/env bash
+# Audio transcription and summarization pipeline.
+#
+# Required tools: bash, ffmpeg, uv (whisperx), jq, curl, ollama
+#
+# ENV:
+#   HF_TOKEN   HuggingFace token for speaker diarization.
+#              If unset or empty, falls back to "dummy" with a warning.
+#   MODEL      ollama model (default: gemma4:12b-it-qat)
+#   API_URL    ollama API endpoint (default: http://localhost:11434/api/generate)
+#   NUM_CTX    ollama context window in tokens (default: 16384)
 
 set -Eeuo pipefail
 
-readonly TARGET_MOV="./data/raw/target.mov"
-readonly TARGET_WAV="./data/interim/target.wav"
-readonly WHISPER_OUTPUT_DIR="./data/interim/"
-readonly HF_TOKEN="dummy"
+SCRIPT_NAME=$(basename "${0}")
+readonly SCRIPT_NAME
 
-ffmpeg -i "$TARGET_MOV" -vn -acodec pcm_s16le -ar 16000 -ac 1 "$TARGET_WAV"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+readonly SCRIPT_DIR
 
-uv run whisperx "$TARGET_WAV" --output_dir "$WHISPER_OUTPUT_DIR" --model large-v3-turbo --diarize --output_format srt --device cpu --batch_size 4 --language ja --compute_type int8 --hf_token="$HF_TOKEN"
+# Global constants (overridable via env)
+: "${MODEL:=gemma4:12b-it-qat}"
+readonly MODEL
+: "${API_URL:=http://localhost:11434/api/generate}"
+readonly API_URL
+# Proofread regenerates the full transcript, so the context window must hold
+# prompt + input SRT + output SRT. Too small a value yields an empty response.
+: "${NUM_CTX:=16384}"
+readonly NUM_CTX
 
-readonly MODEL="gemma4:e4b-it-qat"
-readonly WHISPER_SRT="$WHISPER_OUTPUT_DIR/target.srt"
-readonly OLLAMA_OUTPUT_DIR="./data/interim/"
-readonly FORMATTED_OUTPUT="$OLLAMA_OUTPUT_DIR/target-formatted.srt"
-readonly SUMMARY_OUTPUT="$OLLAMA_OUTPUT_DIR/target-summary.srt"
-API_URL="http://localhost:11434/api/generate"
+readonly INTERIM_DIR="./data/interim"
 
-jq -Rs --arg model "$MODEL" '
-{
-  model: $model,
-  stream: false,
-  options: {
-    temperature: 0
-  },
-  prompt: (
-"以下は音声認識によるSRT形式の書き起こしです。
+# Temp file registry for EXIT trap
+TMP_FILES=()
 
-あなたの作業は「最小限の校正」のみです。
-元の形式を厳密に維持してください。
-
-厳守事項:
-- SRTの番号、タイムスタンプ、話者ラベルは一切変更しない
-- ブロックの順番、数、区切りを変更しない
-- 発話内容だけを修正する
-- 要約しない
-- 言い換えない
-- 内容を追加しない
-- 内容を削除しない
-- 文の順番を入れ替えない
-- 複数ブロックを結合しない
-- 1つのブロックを分割しない
-- 推測で専門用語や固有名詞を置き換えない
-- 不自然でも、意味が判別できない箇所は原文を残す
-- 明らかな誤字、脱字、句読点のみ修正する
-- 句読点の追加は最小限にする
-
-修正してよいこと:
-- 句読点の追加
-- 明らかな誤字の修正
-- 明らかに欠けている助詞の補完
-
-修正してはいけない例:
-- 「今日に回させていただきました」を「忙しなかったので」に変える
-- 「ログインの阻止」を推測で別表現に変える
-- 「昨日終了したいと思います」を勝手に「本日終了」に変える
-- 話者ラベルやタイムスタンプを削除する
-
-出力:
-- 入力と同じSRT形式のみを出力する
-- 説明、前置き、補足は出力しない
-
-書き起こしテキスト:
----
-" + . + "
----"
-  )
+function log_info() {
+  local message="$1"
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$SCRIPT_NAME] [INFO] $message" >&2
 }
-' "$WHISPER_SRT" |
-  curl -sS "$API_URL" \
-    -H "Content-Type: application/json" \
-    -d @- |
-  jq -r '.response' >"$FORMATTED_OUTPUT"
 
-jq -Rs --arg model "$MODEL" '
-{
-  model: $model,
-  stream: false,
-  options: {
-    temperature: 0
-  },
-  prompt: (
-"以下は会議の書き起こしを整形したテキストです。
-会議内容が分かるように、簡潔に要約してください。
-
-条件:
-- 書き起こしにない内容は追加しない
-- 推測しない
-- 重要な内容は欠落させない
-- 話された順番をできるだけ維持する
-- TODO、決定事項、論点などに分類しない
-- 固有名詞、日付、時刻、システム名は残す
-- 不明な箇所は「不明瞭」と書く
-- 要約ではあるが、話題単位の省略はしない
-- 箇条書きの数は固定しない
-- 会議内容に応じて、必要な数だけ箇条書きにする
-- 1つの箇条書きには、原則として1つの話題だけを書く
-- 複数の話題を無理に1つへまとめない
-- 抽象的に言い換えすぎない
-- 「議論した」「調査した」「検討した」「焦点を当てた」「求められた」などは、書き起こしから明確に分かる場合だけ使う
-- 明確でない場合は「話した」「確認した」「触れた」と書く
-- 「予定」「決定」「依頼」は、書き起こしから明確に分かる場合だけ使う
-- 会議終了の挨拶だけの内容は、重要でなければ省略する
-
-文体:
-- 常体で書く
-- 事実ベースで簡潔に書く
-
-出力形式:
-
-# 概要
-
-会議全体を1〜2文で要約する。
-抽象化しすぎず、主な話題が分かるように書く。
-
-# 会話内容の要約
-
-会話された順番に沿って、話題ごとに箇条書きで要約する。
-箇条書きの数は固定せず、会議内容に応じて必要な数だけ出力する。
-
-対象テキスト:
----
-{{INPUT}}
----
-
-対象テキスト:
----
-" + . + "
----"
-  )
+function log_err() {
+  local message="$1"
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$SCRIPT_NAME] [ERROR] $message" >&2
 }
-' "$FORMATTED_OUTPUT" |
-  curl -sS "$API_URL" \
-    -H "Content-Type: application/json" \
-    -d @- |
-  jq -r '.response' >"$SUMMARY_OUTPUT"
+
+function err() {
+  log_err "Line $1: $2"
+  exit 1
+}
+
+trap 'err ${LINENO} "$BASH_COMMAND"' ERR
+trap 'cleanup_tmp' EXIT
+
+function cleanup_tmp() {
+  if [[ ${#TMP_FILES[@]} -gt 0 ]]; then
+    rm -f "${TMP_FILES[@]}"
+  fi
+}
+
+function register_tmp() {
+  TMP_FILES+=("$1")
+}
+
+function usage() {
+  cat <<EOF
+Usage: ${SCRIPT_NAME} [OPTIONS] <video-or-audio-file>
+
+Transcribes a meeting video/audio file and generates a summary.
+
+OPTIONS:
+  -h, --help     Show this help message
+  -v, --verbose  Enable verbose output (set -x)
+
+ENV:
+  HF_TOKEN   HuggingFace token (required for diarization; falls back to dummy)
+  MODEL      ollama model (default: gemma4:12b-it-qat)
+  API_URL    ollama API (default: http://localhost:11434/api/generate)
+  NUM_CTX    ollama context window in tokens (default: 16384)
+
+EXAMPLES:
+  ${SCRIPT_NAME} meeting.mov
+  ${SCRIPT_NAME} --verbose /path/to/recording.mp4
+EOF
+}
+
+# extract_audio <input_video> <output_wav>
+function extract_audio() {
+  [[ $# -eq 2 ]] || err "${LINENO}" "extract_audio requires 2 args"
+  local input_video="$1" output_wav="$2"
+  log_info "Extracting audio: ${input_video} -> ${output_wav}"
+  ffmpeg -i "$input_video" -vn -acodec pcm_s16le -ar 16000 -ac 1 "$output_wav"
+}
+
+# transcribe <input_wav> <interim_dir> <checkpoint_srt>
+function transcribe() {
+  [[ $# -eq 3 ]] || err "${LINENO}" "transcribe requires 3 args"
+  local input_wav="$1" interim_dir="$2" checkpoint_srt="$3"
+
+  local hf_token
+  if [[ -z "${HF_TOKEN:-}" ]]; then
+    log_err "HF_TOKEN is not set; falling back to dummy. Diarization may fail."
+    hf_token="dummy"
+  else
+    hf_token="$HF_TOKEN"
+  fi
+  readonly hf_token
+
+  log_info "Running whisperx: ${input_wav}"
+  uv run whisperx "$input_wav" \
+    --output_dir "$interim_dir" \
+    --model large-v3-turbo \
+    --diarize \
+    --output_format srt \
+    --device cpu \
+    --batch_size 4 \
+    --language ja \
+    --compute_type int8 \
+    --hf_token="$hf_token"
+
+  local base
+  base=$(basename "$input_wav" .wav)
+  readonly base
+
+  local whisperx_srt="${interim_dir}/${base}.srt"
+  log_info "Copying ASR result to checkpoint: ${checkpoint_srt}"
+  cp "$whisperx_srt" "$checkpoint_srt"
+}
+
+# run_ollama <prompt_template_file> <input_file> <output_file>
+function run_ollama() {
+  [[ $# -eq 3 ]] || err "${LINENO}" "run_ollama requires 3 args"
+  local template_file="$1" input_file="$2" output_file="$3"
+
+  local prompt_file request_file response_file
+  prompt_file=$(mktemp)
+  register_tmp "$prompt_file"
+  request_file=$(mktemp)
+  register_tmp "$request_file"
+  response_file=$(mktemp)
+  register_tmp "$response_file"
+  readonly prompt_file request_file response_file
+
+  # Step 1: build prompt by replacing {{INPUT}} with file contents
+  jq -Rs --rawfile template "$template_file" \
+    '. as $input | $template | split("{{INPUT}}") | join($input)' \
+    "$input_file" >"$prompt_file"
+
+  # Step 2: build request JSON
+  jq -n --arg model "$MODEL" --argjson num_ctx "$NUM_CTX" --rawfile prompt "$prompt_file" \
+    '{ model: $model, stream: false, options: { temperature: 0, num_ctx: $num_ctx }, prompt: $prompt }' \
+    >"$request_file"
+
+  # Step 3: call ollama API
+  curl -sS "$API_URL" -H "Content-Type: application/json" \
+    --data-binary @"$request_file" >"$response_file"
+
+  # Step 4: validate .response is a non-empty string, then write it out.
+  # jq -r appends a trailing newline, so an empty response still yields a
+  # 1-byte file; check the value itself rather than the file size.
+  if ! jq -e '(.response // "") != ""' "$response_file" >/dev/null 2>&1; then
+    err "${LINENO}" "ollama returned an empty .response (model=${MODEL}, num_ctx=${NUM_CTX}). Check ollama logs / increase NUM_CTX."
+  fi
+  jq -r '.response' "$response_file" >"$output_file"
+}
+
+function main() {
+  local verbose=0
+  local input_file=""
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -v | --verbose)
+      verbose=1
+      shift
+      ;;
+    -*)
+      log_err "Unknown option: $1"
+      usage >&2
+      exit 1
+      ;;
+    *)
+      if [[ -n "$input_file" ]]; then
+        log_err "Too many positional arguments"
+        usage >&2
+        exit 1
+      fi
+      input_file="$1"
+      shift
+      ;;
+    esac
+  done
+
+  if [[ -z "$input_file" ]]; then
+    log_err "Missing required argument: <video-or-audio-file>"
+    usage >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$input_file" || ! -r "$input_file" ]]; then
+    log_err "File not found or not readable: ${input_file}"
+    exit 1
+  fi
+
+  if [[ "$verbose" -eq 1 ]]; then
+    set -x
+  fi
+
+  local base video_dir
+  base=$(basename "$input_file")
+  base="${base%.*}"
+  video_dir=$(cd "$(dirname "$input_file")" && pwd)
+  readonly base video_dir
+
+  # Derived paths
+  local cp_summary="${video_dir}/${base}-summary.md"
+  local cp_asr="${video_dir}/${base}-asr.srt"
+  local cp_proofread="${video_dir}/${base}-proofread.srt"
+  readonly cp_summary cp_asr cp_proofread
+
+  local interim_wav="${INTERIM_DIR}/${base}.wav"
+  local interim_asr="${INTERIM_DIR}/${base}.srt"
+  local interim_proofread="${INTERIM_DIR}/${base}-proofread.srt"
+  local interim_summary="${INTERIM_DIR}/${base}-summary.md"
+  readonly interim_wav interim_asr interim_proofread interim_summary
+
+  local proofread_prompt="${SCRIPT_DIR}/prompts/proofread.md"
+  local summarize_prompt="${SCRIPT_DIR}/prompts/summarize.md"
+  readonly proofread_prompt summarize_prompt
+
+  # Requirement 8: final result already exists, nothing to do
+  if [[ -s "$cp_summary" ]]; then
+    log_info "Final result already exists: ${cp_summary}. Nothing to do."
+    exit 0
+  fi
+
+  mkdir -p "$INTERIM_DIR"
+
+  # Stage: whisperx (ASR)
+  if [[ -s "$cp_asr" ]]; then
+    log_info "ASR checkpoint found, skipping whisperx: ${cp_asr}"
+    cp "$cp_asr" "$interim_asr"
+  else
+    extract_audio "$input_file" "$interim_wav"
+    transcribe "$interim_wav" "$INTERIM_DIR" "$cp_asr"
+    # interim_asr is the whisperx default output
+  fi
+
+  # Stage: proofread (ollama)
+  if [[ -s "$cp_proofread" ]]; then
+    log_info "Proofread checkpoint found, skipping: ${cp_proofread}"
+    cp "$cp_proofread" "$interim_proofread"
+  else
+    log_info "Running proofread stage"
+    run_ollama "$proofread_prompt" "$interim_asr" "$interim_proofread"
+    log_info "Copying proofread result to checkpoint: ${cp_proofread}"
+    cp "$interim_proofread" "$cp_proofread"
+  fi
+
+  # Stage: summarize (ollama)
+  log_info "Running summarize stage"
+  run_ollama "$summarize_prompt" "$interim_proofread" "$interim_summary"
+  log_info "Copying summary result to checkpoint: ${cp_summary}"
+  cp "$interim_summary" "$cp_summary"
+
+  # Requirement 9: cleanup interim files on success
+  log_info "Cleaning up interim files for base: ${base}"
+  rm -f "${INTERIM_DIR}/${base}"*
+
+  log_info "Done. Results in: ${video_dir}"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi
