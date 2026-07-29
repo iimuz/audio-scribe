@@ -43,12 +43,19 @@ ENV:
 ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.md](prompts/proofread.md)、
 [prompts/summarize.md](prompts/summarize.md)) に記述し、`{{INPUT}}` プレースホルダに
 書き起こしテキストが差し込まれる。リクエストは `jq --rawfile` + `curl --data-binary @file`
-でファイル経由して送信し、レスポンスは `jq -r '.response'` で取り出す。リクエストの
-`options` には `temperature: 0` と `num_ctx` (既定 16384) を指定する。校正は入力 SRT 全文を
-再生成するため、`num_ctx` が小さいと応答が空になり得る (空応答は下記のガードで検出)。
+でファイル経由して送信する。リクエストの `options` には `temperature: 0` と `num_ctx`
+(既定 16384) を指定する。校正は入力 SRT 全文を再生成するため、`num_ctx` が小さいと応答が
+空になり得る (空応答は下記のガードで検出)。
 
-`.response` が欠落または空文字列の場合はエラーで停止する (`jq -e '(.response // "") != ""'`
-で値を検査)。`jq -r` が末尾改行を付けるためファイルサイズ判定では空を検出できないことに注意。
+レスポンスは `stream: true` でストリーミング受信する (生成完了まで何も表示されないのを避け、
+進捗が見えるようにするため)。ollama は JSON Lines (1 行 1 JSON、各行に `.response` トークンと
+`.done`) を返すので、`curl -sS --no-buffer` で受け取り、生ストリームを `tee` で一時ファイルに
+保存しつつ、`jq -j --unbuffered '.response // empty'` でトークンだけ抽出して `tee` で標準エラー
+(ライブ表示) と出力ファイルの両方へ流す。
+
+検証は受信後にまとめて行う。API エラーはストリーム中の `.error` フィールドを持つ行で検出し
+(`jq -se 'any(.[]; has("error"))'`)、トークンが 1 つも出なかった場合は出力ファイルが空になるため
+`-s` で検出する。`jq -j` は末尾改行を付けないので、整合のため出力ファイルに改行を 1 つ追記する。
 
 ### 再開・スキップのロジック
 

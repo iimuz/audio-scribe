@@ -25,7 +25,10 @@ readonly MODEL
 readonly API_URL
 # Proofread regenerates the full transcript, so the context window must hold
 # prompt + input SRT + output SRT. Too small a value yields an empty response.
-: "${NUM_CTX:=16384}"
+# 16 K = 16384
+# 128 K = 131072
+# 256 K = 262144
+: "${NUM_CTX:=131072}"
 readonly NUM_CTX
 
 readonly INTERIM_DIR="./data/interim"
@@ -145,22 +148,33 @@ function run_ollama() {
     '. as $input | $template | split("{{INPUT}}") | join($input)' \
     "$input_file" >"$prompt_file"
 
-  # Step 2: build request JSON
+  # Step 2: build request JSON (streaming enabled for live output)
   jq -n --arg model "$MODEL" --argjson num_ctx "$NUM_CTX" --rawfile prompt "$prompt_file" \
-    '{ model: $model, stream: false, options: { temperature: 0, num_ctx: $num_ctx }, prompt: $prompt }' \
+    '{ model: $model, stream: true, options: { temperature: 0, num_ctx: $num_ctx }, prompt: $prompt }' \
     >"$request_file"
 
-  # Step 3: call ollama API
-  curl -sS "$API_URL" -H "Content-Type: application/json" \
-    --data-binary @"$request_file" >"$response_file"
+  # Step 3: call ollama API and stream the response.
+  # The raw JSON-Lines stream is saved to response_file for validation, while
+  # the generated tokens are extracted live: shown on stderr and accumulated
+  # into output_file. --no-buffer / --unbuffered keep the output flowing.
+  curl -sS --no-buffer "$API_URL" -H "Content-Type: application/json" \
+    --data-binary @"$request_file" |
+    tee "$response_file" |
+    jq -j --unbuffered '.response // empty' |
+    tee "$output_file" >&2
+  echo >&2
 
-  # Step 4: validate .response is a non-empty string, then write it out.
-  # jq -r appends a trailing newline, so an empty response still yields a
-  # 1-byte file; check the value itself rather than the file size.
-  if ! jq -e '(.response // "") != ""' "$response_file" >/dev/null 2>&1; then
-    err "${LINENO}" "ollama returned an empty .response (model=${MODEL}, num_ctx=${NUM_CTX}). Check ollama logs / increase NUM_CTX."
+  # Step 4: validate the result.
+  # An API error arrives as an object with an .error field somewhere in the
+  # stream; an empty output_file means no tokens were produced at all.
+  if jq -se 'any(.[]; has("error"))' "$response_file" >/dev/null 2>&1; then
+    err "${LINENO}" "ollama returned an error: $(jq -rs '[.[] | .error // empty] | join("; ")' "$response_file")"
   fi
-  jq -r '.response' "$response_file" >"$output_file"
+  if [[ ! -s "$output_file" ]]; then
+    err "${LINENO}" "ollama returned an empty response (model=${MODEL}, num_ctx=${NUM_CTX}). Check ollama logs / increase NUM_CTX."
+  fi
+  # jq -j does not append a trailing newline; add one for consistency.
+  echo >>"$output_file"
 }
 
 function main() {
@@ -249,22 +263,22 @@ function main() {
     # interim_asr is the whisperx default output
   fi
 
-  # Stage: proofread (ollama)
-  if [[ -s "$cp_proofread" ]]; then
-    log_info "Proofread checkpoint found, skipping: ${cp_proofread}"
-    cp "$cp_proofread" "$interim_proofread"
-  else
-    log_info "Running proofread stage"
-    run_ollama "$proofread_prompt" "$interim_asr" "$interim_proofread"
-    log_info "Copying proofread result to checkpoint: ${cp_proofread}"
-    cp "$interim_proofread" "$cp_proofread"
-  fi
-
-  # Stage: summarize (ollama)
-  log_info "Running summarize stage"
-  run_ollama "$summarize_prompt" "$interim_proofread" "$interim_summary"
-  log_info "Copying summary result to checkpoint: ${cp_summary}"
-  cp "$interim_summary" "$cp_summary"
+  # # Stage: proofread (ollama)
+  # if [[ -s "$cp_proofread" ]]; then
+  #   log_info "Proofread checkpoint found, skipping: ${cp_proofread}"
+  #   cp "$cp_proofread" "$interim_proofread"
+  # else
+  #   log_info "Running proofread stage"
+  #   run_ollama "$proofread_prompt" "$interim_asr" "$interim_proofread"
+  #   log_info "Copying proofread result to checkpoint: ${cp_proofread}"
+  #   cp "$interim_proofread" "$cp_proofread"
+  # fi
+  #
+  # # Stage: summarize (ollama)
+  # log_info "Running summarize stage"
+  # run_ollama "$summarize_prompt" "$interim_proofread" "$interim_summary"
+  # log_info "Copying summary result to checkpoint: ${cp_summary}"
+  # cp "$interim_summary" "$cp_summary"
 
   # Requirement 9: cleanup interim files on success
   log_info "Cleaning up interim files for base: ${base}"
