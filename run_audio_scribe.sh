@@ -263,22 +263,22 @@ function main() {
     # interim_asr is the whisperx default output
   fi
 
-  # # Stage: proofread (ollama)
-  # if [[ -s "$cp_proofread" ]]; then
-  #   log_info "Proofread checkpoint found, skipping: ${cp_proofread}"
-  #   cp "$cp_proofread" "$interim_proofread"
-  # else
-  #   log_info "Running proofread stage"
-  #   run_ollama "$proofread_prompt" "$interim_asr" "$interim_proofread"
-  #   log_info "Copying proofread result to checkpoint: ${cp_proofread}"
-  #   cp "$interim_proofread" "$cp_proofread"
-  # fi
-  #
-  # # Stage: summarize (ollama)
-  # log_info "Running summarize stage"
-  # run_ollama "$summarize_prompt" "$interim_proofread" "$interim_summary"
-  # log_info "Copying summary result to checkpoint: ${cp_summary}"
-  # cp "$interim_summary" "$cp_summary"
+  # Stage: proofread (ollama)
+  if [[ -s "$cp_proofread" ]]; then
+    log_info "Proofread checkpoint found, skipping: ${cp_proofread}"
+    cp "$cp_proofread" "$interim_proofread"
+  else
+    log_info "Running proofread stage"
+    run_ollama "$proofread_prompt" "$interim_asr" "$interim_proofread"
+    log_info "Copying proofread result to checkpoint: ${cp_proofread}"
+    cp "$interim_proofread" "$cp_proofread"
+  fi
+
+  # Stage: summarize (ollama)
+  log_info "Running summarize stage"
+  run_ollama "$summarize_prompt" "$interim_proofread" "$interim_summary"
+  log_info "Copying summary result to checkpoint: ${cp_summary}"
+  cp "$interim_summary" "$cp_summary"
 
   # Requirement 9: cleanup interim files on success
   log_info "Cleaning up interim files for base: ${base}"
