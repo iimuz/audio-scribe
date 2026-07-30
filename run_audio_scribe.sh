@@ -179,6 +179,28 @@ function run_ollama() {
   echo >>"$output_file"
 }
 
+# strip_markdown_fence <file>
+# Defensive normalization: even with the custom --system-prompt asking for no
+# code fences, claude occasionally still wraps the whole reply in a single
+# ```...``` block. Checkpoints are only validated by "non-empty" (see main()),
+# so a fence-wrapped SRT would otherwise be treated as complete and never
+# self-heal on retry. Strip a leading and matching trailing fence line when
+# the entire file is wrapped this way.
+function strip_markdown_fence() {
+  [[ $# -eq 1 ]] || err "${LINENO}" "strip_markdown_fence requires 1 arg"
+  local file="$1"
+
+  [[ -s "$file" ]] || return 0
+  head -n1 "$file" | grep -qE '^```' || return 0
+  tail -n1 "$file" | grep -qE '^```[[:space:]]*$' || return 0
+
+  local stripped
+  stripped=$(mktemp)
+  register_tmp "$stripped"
+  sed '1d;$d' "$file" >"$stripped"
+  mv "$stripped" "$file"
+}
+
 function run_claude() {
   [[ $# -eq 3 ]] || err "${LINENO}" "run_claude requires 3 args"
   local template_file="$1" input_file="$2" output_file="$3"
@@ -198,10 +220,31 @@ function run_claude() {
   # Step 2: run claude in non-interactive mode. Unlike ollama, the output is
   # not streamed; it arrives all at once when generation completes. The prompt
   # goes via stdin to avoid argument length limits.
+  # This must be a pure text transform, not an agentic session, so repo context
+  # (CLAUDE.md, hooks, plugins, cwd/git info, etc.) must not leak into the
+  # output and corrupt the proofread/summary checkpoints:
+  #   --safe-mode disables CLAUDE.md/skills/plugins/hooks/MCP auto-discovery
+  #     while keeping normal OAuth/API-key auth working (unlike --bare, which
+  #     restricts auth strictly to ANTHROPIC_API_KEY/apiKeyHelper and breaks
+  #     login for OAuth-based accounts).
+  #   --tools "" disables all tool access, so the model cannot read/glob/grep
+  #     repo files even if the transcript content tried to instruct it to.
+  #   --system-prompt replaces (not appends to) the default system prompt.
+  #     The default system prompt embeds dynamic per-machine sections (cwd,
+  #     git status/branch/log) even under --safe-mode; only a full
+  #     replacement keeps the repo name and branch from leaking into output
+  #     (verified: with only --safe-mode --tools "", the model could still
+  #     name this repo and its current branch). This also suppresses
+  #     conversational preamble/postamble and markdown code fences.
+  local system_prompt="You are a plain text transformation tool with no knowledge of any project, repository, codebase, or filesystem. Output only the exact content requested by the user instructions. Do not add any preamble, explanation, markdown code fences, or closing remarks before or after the output."
+  readonly system_prompt
   log_info "Running claude -p (model=${MODEL}); output appears when done"
-  if ! claude -p --model "$MODEL" <"$prompt_file" >"$output_file"; then
+  if ! claude -p --safe-mode --tools "" --system-prompt "$system_prompt" \
+    --model "$MODEL" <"$prompt_file" >"$output_file"; then
     err "${LINENO}" "claude -p failed (model=${MODEL})"
   fi
+
+  strip_markdown_fence "$output_file"
 
   if [[ ! -s "$output_file" ]]; then
     err "${LINENO}" "claude returned an empty response (model=${MODEL})"

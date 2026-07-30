@@ -41,8 +41,11 @@ Recursively finds .mov files under <directory> and runs run_audio_scribe.sh
 on each one sequentially. Continues processing remaining files even if one fails.
 
 OPTIONS:
-  -h, --help     Show this help message
-  -v, --verbose  Enable verbose output (set -x)
+  -h, --help         Show this help message
+  -v, --verbose      Enable verbose output (set -x)
+  -a, --agent AGENT  LLM agent: ollama or claude (passed through to run_audio_scribe.sh)
+  -m, --model MODEL  Model name in the selected agent's format
+                     (passed through to run_audio_scribe.sh)
 
 ENV:
   HF_TOKEN   HuggingFace token (passed through to run_audio_scribe.sh)
@@ -59,6 +62,7 @@ EOF
 function main() {
   local verbose=0
   local target_dir=""
+  local agent="" agent_model=""
 
   while [[ $# -gt 0 ]]; do
     case $1 in
@@ -69,6 +73,24 @@ function main() {
     -v | --verbose)
       verbose=1
       shift
+      ;;
+    -a | --agent)
+      if [[ $# -lt 2 ]]; then
+        log_err "Missing value for $1"
+        usage >&2
+        exit 1
+      fi
+      agent="$2"
+      shift 2
+      ;;
+    -m | --model)
+      if [[ $# -lt 2 ]]; then
+        log_err "Missing value for $1"
+        usage >&2
+        exit 1
+      fi
+      agent_model="$2"
+      shift 2
       ;;
     -*)
       log_err "Unknown option: $1"
@@ -122,6 +144,10 @@ function main() {
 
   log_info "Found ${total} .mov file(s) under ${target_dir}"
 
+  local child_args=()
+  [[ -n "$agent" ]] && child_args+=(--agent "$agent")
+  [[ -n "$agent_model" ]] && child_args+=(--model "$agent_model")
+
   local succeeded=0
   local failed_files=()
 
@@ -129,7 +155,7 @@ function main() {
   for file in "${files[@]}"; do
     i=$((i + 1))
     log_info "[${i}/${total}] Processing: ${file}"
-    if bash "$CHILD_SCRIPT" "$file"; then
+    if bash "$CHILD_SCRIPT" "${child_args[@]}" "$file"; then
       succeeded=$((succeeded + 1))
       log_info "[${i}/${total}] Succeeded: ${file}"
     else

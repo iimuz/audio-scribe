@@ -1,7 +1,7 @@
 {
   "version": "0.2",
   "language": "en",
-  "words": ["acodec", "argjson", "claude", "Eeuo", "haiku", "ollama", "pipefail", "rawfile", "stdin", "whisperx"],
+  "words": ["acodec", "argjson", "claude", "Eeuo", "haiku", "ollama", "pipefail", "postamble", "rawfile", "stdin", "whisperx"],
   "dictionaries": [
     "bash",
     "cinc",
