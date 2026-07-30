@@ -19,8 +19,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly SCRIPT_DIR
 
 # Global constants (overridable via env)
-: "${MODEL:=gemma4:12b-it-qat}"
-readonly MODEL
+# MODEL and AGENT are resolved in main() after argument parsing.
 : "${API_URL:=http://localhost:11434/api/generate}"
 readonly API_URL
 # Proofread regenerates the full transcript, so the context window must hold
@@ -71,12 +70,15 @@ Usage: ${SCRIPT_NAME} [OPTIONS] <video-or-audio-file>
 Transcribes a meeting video/audio file and generates a summary.
 
 OPTIONS:
-  -h, --help     Show this help message
-  -v, --verbose  Enable verbose output (set -x)
+  -h, --help         Show this help message
+  -v, --verbose      Enable verbose output (set -x)
+  -a, --agent AGENT  LLM agent: ollama or claude (default: ollama)
+  -m, --model MODEL  Model name in the selected agent's format
+                     (default: ollama=gemma4:12b-it-qat, claude=haiku)
 
 ENV:
   HF_TOKEN   HuggingFace token (required for diarization; falls back to dummy)
-  MODEL      ollama model (default: gemma4:12b-it-qat)
+  MODEL      ollama model, used when --model is not given (default: gemma4:12b-it-qat)
   API_URL    ollama API (default: http://localhost:11434/api/generate)
   NUM_CTX    ollama context window in tokens (default: 16384)
 
@@ -180,6 +182,7 @@ function run_ollama() {
 function main() {
   local verbose=0
   local input_file=""
+  local agent="ollama" agent_model=""
 
   while [[ $# -gt 0 ]]; do
     case $1 in
@@ -190,6 +193,24 @@ function main() {
     -v | --verbose)
       verbose=1
       shift
+      ;;
+    -a | --agent)
+      if [[ $# -lt 2 ]]; then
+        log_err "Missing value for $1"
+        usage >&2
+        exit 1
+      fi
+      agent="$2"
+      shift 2
+      ;;
+    -m | --model)
+      if [[ $# -lt 2 ]]; then
+        log_err "Missing value for $1"
+        usage >&2
+        exit 1
+      fi
+      agent_model="$2"
+      shift 2
       ;;
     -*)
       log_err "Unknown option: $1"
@@ -213,6 +234,27 @@ function main() {
     usage >&2
     exit 1
   fi
+
+  case $agent in
+  ollama | claude) ;;
+  *)
+    log_err "Invalid agent: ${agent} (expected: ollama or claude)"
+    usage >&2
+    exit 1
+    ;;
+  esac
+
+  if [[ -z "$agent_model" ]]; then
+    if [[ "$agent" == "claude" ]]; then
+      agent_model="haiku"
+    else
+      agent_model="${MODEL:-gemma4:12b-it-qat}"
+    fi
+  fi
+  AGENT="$agent"
+  MODEL="$agent_model"
+  # shellcheck disable=SC2034
+  readonly AGENT MODEL
 
   if [[ ! -f "$input_file" || ! -r "$input_file" ]]; then
     log_err "File not found or not readable: ${input_file}"
