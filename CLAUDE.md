@@ -62,7 +62,10 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 
 `--agent claude` を指定した場合は ollama API の代わりに `claude -p` を実行する。
 プロンプトは stdin 経由で渡し、モデルは `--model` (既定: `haiku`) を
-`claude -p --model` に渡す。出力はストリーミングせず完了時にまとめて受信し、
+`claude -p --model` に渡す。出力はストリーミングせず完了時にまとめて受信する。
+バックエンドは `--safe-mode --tools ""` (リポジトリカスタマイズなしのサンドボックス化) と
+`--system-prompt` による完全置換 (このリポジトリへの一切の認識を排除し、純粋なテキスト変換にする)
+で実行され、さらに防御的な `strip_markdown_fence` 後処理でフェンス行を除去したうえで、
 終了コードと出力ファイル非空 (`-s`) で検証する。
 
 ### 再開・スキップのロジック

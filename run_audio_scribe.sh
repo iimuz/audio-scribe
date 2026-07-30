@@ -184,8 +184,9 @@ function run_ollama() {
 # code fences, claude occasionally still wraps the whole reply in a single
 # ```...``` block. Checkpoints are only validated by "non-empty" (see main()),
 # so a fence-wrapped SRT would otherwise be treated as complete and never
-# self-heal on retry. Strip a leading and matching trailing fence line when
-# the entire file is wrapped this way.
+# self-heal on retry. Strip a leading and matching trailing fence line if the
+# first line begins with ``` (optionally with a language tag like ```srt) and
+# the last line is exactly triple-backticks.
 function strip_markdown_fence() {
   [[ $# -eq 1 ]] || err "${LINENO}" "strip_markdown_fence requires 1 arg"
   local file="$1"

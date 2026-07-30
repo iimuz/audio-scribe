@@ -49,13 +49,14 @@ OPTIONS:
 
 ENV:
   HF_TOKEN   HuggingFace token (passed through to run_audio_scribe.sh)
-  MODEL      ollama model (passed through to run_audio_scribe.sh)
+  MODEL      ollama model (used only for ollama agent when --model is not given; passed through to run_audio_scribe.sh)
   API_URL    ollama API endpoint (passed through to run_audio_scribe.sh)
   NUM_CTX    ollama context window in tokens (passed through to run_audio_scribe.sh)
 
 EXAMPLES:
   ${SCRIPT_NAME} /path/to/recordings
   ${SCRIPT_NAME} --verbose ./meetings
+  ${SCRIPT_NAME} --agent claude --model haiku ./meetings
 EOF
 }
 
