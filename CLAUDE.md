@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 会議の録画動画・音声から文字起こしを行い、要約まで生成するパイプライン。
 処理の本体は単一の Bash スクリプト [run_audio_scribe.sh](run_audio_scribe.sh) で、
-`ffmpeg` → `whisperx` → `ollama` を順に呼び出す。Python パッケージは存在せず
+`ffmpeg` → `whisperx` → LLM agent (既定: ollama) を順に呼び出す。Python パッケージは存在せず
 (`pyproject.toml` の `dependencies = []`、`package = false`)、Python/Node のツールチェーンは
 リンタ・フォーマッタ・spell check のためだけに導入されている。
 
