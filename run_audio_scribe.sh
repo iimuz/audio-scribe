@@ -179,6 +179,43 @@ function run_ollama() {
   echo >>"$output_file"
 }
 
+function run_claude() {
+  [[ $# -eq 3 ]] || err "${LINENO}" "run_claude requires 3 args"
+  local template_file="$1" input_file="$2" output_file="$3"
+
+  command -v claude >/dev/null 2>&1 || err "${LINENO}" "claude CLI not found in PATH"
+
+  local prompt_file
+  prompt_file=$(mktemp)
+  register_tmp "$prompt_file"
+  readonly prompt_file
+
+  # Step 1: build prompt by replacing {{INPUT}} with file contents
+  jq -Rs --rawfile template "$template_file" \
+    '. as $input | $template | split("{{INPUT}}") | join($input)' \
+    "$input_file" >"$prompt_file"
+
+  # Step 2: run claude in non-interactive mode. Unlike ollama, the output is
+  # not streamed; it arrives all at once when generation completes. The prompt
+  # goes via stdin to avoid argument length limits.
+  log_info "Running claude -p (model=${MODEL}); output appears when done"
+  if ! claude -p --model "$MODEL" <"$prompt_file" >"$output_file"; then
+    err "${LINENO}" "claude -p failed (model=${MODEL})"
+  fi
+
+  if [[ ! -s "$output_file" ]]; then
+    err "${LINENO}" "claude returned an empty response (model=${MODEL})"
+  fi
+}
+
+function run_agent() {
+  case $AGENT in
+  ollama) run_ollama "$@" ;;
+  claude) run_claude "$@" ;;
+  *) err "${LINENO}" "Unknown agent: ${AGENT}" ;;
+  esac
+}
+
 function main() {
   local verbose=0
   local input_file=""
@@ -305,20 +342,20 @@ function main() {
     # interim_asr is the whisperx default output
   fi
 
-  # Stage: proofread (ollama)
+  # Stage: proofread (LLM agent)
   if [[ -s "$cp_proofread" ]]; then
     log_info "Proofread checkpoint found, skipping: ${cp_proofread}"
     cp "$cp_proofread" "$interim_proofread"
   else
     log_info "Running proofread stage"
-    run_ollama "$proofread_prompt" "$interim_asr" "$interim_proofread"
+    run_agent "$proofread_prompt" "$interim_asr" "$interim_proofread"
     log_info "Copying proofread result to checkpoint: ${cp_proofread}"
     cp "$interim_proofread" "$cp_proofread"
   fi
 
-  # Stage: summarize (ollama)
+  # Stage: summarize (LLM agent)
   log_info "Running summarize stage"
-  run_ollama "$summarize_prompt" "$interim_proofread" "$interim_summary"
+  run_agent "$summarize_prompt" "$interim_proofread" "$interim_summary"
   log_info "Copying summary result to checkpoint: ${cp_summary}"
   cp "$interim_summary" "$cp_summary"
 
