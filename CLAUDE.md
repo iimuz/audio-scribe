@@ -22,7 +22,7 @@ OPTIONS:
   -v, --verbose      set -x で詳細ログ
   -a, --agent AGENT  LLM agent (ollama | claude; 既定: ollama)
   -m, --model MODEL  モデル名 (選択した agent の書式に従う;
-                     既定: ollama=gemma4:12b-it-qat, claude=haiku)
+                     既定: ollama=gemma4:12b-it-qat, claude=sonnet)
 
 ENV:
   HF_TOKEN   HuggingFace トークン (話者分離に必要; 未設定時は dummy で続行し警告)
@@ -61,7 +61,7 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 `-s` で検出する。`jq -j` は末尾改行を付けないので、整合のため出力ファイルに改行を 1 つ追記する。
 
 `--agent claude` を指定した場合は ollama API の代わりに `claude -p` を実行する。
-プロンプトは stdin 経由で渡し、モデルは `--model` (既定: `haiku`) を
+プロンプトは stdin 経由で渡し、モデルは `--model` (既定: `sonnet`) を
 `claude -p --model` に渡す。出力はストリーミングせず完了時にまとめて受信する。
 バックエンドは `--safe-mode --tools ""` (リポジトリカスタマイズなしのサンドボックス化) と
 `--system-prompt` による完全置換 (このリポジトリへの一切の認識を排除し、純粋なテキスト変換にする)

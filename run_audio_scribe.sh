@@ -74,7 +74,7 @@ OPTIONS:
   -v, --verbose      Enable verbose output (set -x)
   -a, --agent AGENT  LLM agent: ollama or claude (default: ollama)
   -m, --model MODEL  Model name in the selected agent's format
-                     (default: ollama=gemma4:12b-it-qat, claude=haiku)
+                     (default: ollama=gemma4:12b-it-qat, claude=sonnet)
 
 ENV:
   HF_TOKEN   HuggingFace token (required for diarization; falls back to dummy)
@@ -327,7 +327,7 @@ function main() {
 
   if [[ -z "$agent_model" ]]; then
     if [[ "$agent" == "claude" ]]; then
-      agent_model="haiku"
+      agent_model="sonnet"
     else
       agent_model="${MODEL:-gemma4:12b-it-qat}"
     fi
