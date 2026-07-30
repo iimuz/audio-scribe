@@ -18,12 +18,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Usage: run_audio_scribe.sh [OPTIONS] <video-or-audio-file>
 
 OPTIONS:
-  -h, --help     ヘルプを表示
-  -v, --verbose  set -x で詳細ログ
+  -h, --help         ヘルプを表示
+  -v, --verbose      set -x で詳細ログ
+  -a, --agent AGENT  LLM agent (ollama | claude; 既定: ollama)
+  -m, --model MODEL  モデル名 (選択した agent の書式に従う;
+                     既定: ollama=gemma4:12b-it-qat, claude=haiku)
 
 ENV:
   HF_TOKEN   HuggingFace トークン (話者分離に必要; 未設定時は dummy で続行し警告)
-  MODEL      ollama モデル (既定: gemma4:12b-it-qat)
+  MODEL      ollama モデル (--model 未指定時に使用; 既定: gemma4:12b-it-qat)
   API_URL    ollama API エンドポイント (既定: http://localhost:11434/api/generate)
   NUM_CTX    ollama のコンテキスト長 (トークン; 既定: 16384)
 ```
@@ -34,7 +37,7 @@ ENV:
 2. `whisperx` で WAV を文字起こし → `data/interim/<base>.srt`
    (model `large-v3-turbo`、`--diarize` で話者分離、`--language ja`、CPU/int8)。
    結果を `video_dir/<base>-asr.srt` へコピーして永続化。
-3. `ollama` に 2 段階でテキストを渡す:
+3. LLM agent (既定: ollama、`--agent claude` で claude CLI) に 2 段階でテキストを渡す:
    - 校正: `data/interim/<base>.srt` → `data/interim/<base>-proofread.srt`、
      `video_dir/<base>-proofread.srt` へコピー。
    - 要約: `data/interim/<base>-proofread.srt` → `video_dir/<base>-summary.md` (Markdown)。
@@ -56,6 +59,11 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 検証は受信後にまとめて行う。API エラーはストリーム中の `.error` フィールドを持つ行で検出し
 (`jq -se 'any(.[]; has("error"))'`)、トークンが 1 つも出なかった場合は出力ファイルが空になるため
 `-s` で検出する。`jq -j` は末尾改行を付けないので、整合のため出力ファイルに改行を 1 つ追記する。
+
+`--agent claude` を指定した場合は ollama API の代わりに `claude -p` を実行する。
+プロンプトは stdin 経由で渡し、モデルは `--model` (既定: `haiku`) を
+`claude -p --model` に渡す。出力はストリーミングせず完了時にまとめて受信し、
+終了コードと出力ファイル非空 (`-s`) で検証する。
 
 ### 再開・スキップのロジック
 
