@@ -6,7 +6,6 @@
 # ENV:
 #   HF_TOKEN   HuggingFace token for speaker diarization.
 #              If unset or empty, falls back to "dummy" with a warning.
-#   MODEL      ollama model (default: gemma4:12b-it-qat)
 #   API_URL    ollama API endpoint (default: http://localhost:11434/api/generate)
 #   NUM_CTX    ollama context window in tokens (default: 16384)
 
@@ -19,7 +18,8 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly SCRIPT_DIR
 
 # Global constants (overridable via env)
-# MODEL and AGENT are resolved in main() after argument parsing.
+# AGENT, PROOFREAD_MODEL, and SUMMARIZE_MODEL are resolved in main() after
+# argument parsing.
 : "${API_URL:=http://localhost:11434/api/generate}"
 readonly API_URL
 # Proofread regenerates the full transcript, so the context window must hold
@@ -73,12 +73,13 @@ OPTIONS:
   -h, --help         Show this help message
   -v, --verbose      Enable verbose output (set -x)
   -a, --agent AGENT  LLM agent: ollama or claude (default: ollama)
-  -m, --model MODEL  Model name in the selected agent's format
-                     (default: ollama=gemma4:12b-it-qat, claude=sonnet)
+  --proofread-model MODEL   Model for proofreading
+                            (default: ollama=gemma4:4b-it-qat, claude=haiku)
+  --summarize-model MODEL   Model for summarization
+                            (default: ollama=gemma4:12b-it-qat, claude=sonnet)
 
 ENV:
   HF_TOKEN   HuggingFace token (required for diarization; falls back to dummy)
-  MODEL      ollama model, used when --model is not given (default: gemma4:12b-it-qat)
   API_URL    ollama API (default: http://localhost:11434/api/generate)
   NUM_CTX    ollama context window in tokens (default: 16384)
 
@@ -131,9 +132,11 @@ function transcribe() {
   cp "$whisperx_srt" "$checkpoint_srt"
 }
 
-# run_ollama <prompt_template_file> <input_file> <output_file>
+# run_ollama <model> <prompt_template_file> <input_file> <output_file>
 function run_ollama() {
-  [[ $# -eq 3 ]] || err "${LINENO}" "run_ollama requires 3 args"
+  [[ $# -eq 4 ]] || err "${LINENO}" "run_ollama requires 4 args"
+  local model="$1"
+  shift
   local template_file="$1" input_file="$2" output_file="$3"
 
   local prompt_file request_file response_file
@@ -151,7 +154,7 @@ function run_ollama() {
     "$input_file" >"$prompt_file"
 
   # Step 2: build request JSON (streaming enabled for live output)
-  jq -n --arg model "$MODEL" --argjson num_ctx "$NUM_CTX" --rawfile prompt "$prompt_file" \
+  jq -n --arg model "$model" --argjson num_ctx "$NUM_CTX" --rawfile prompt "$prompt_file" \
     '{ model: $model, stream: true, options: { temperature: 0, num_ctx: $num_ctx }, prompt: $prompt }' \
     >"$request_file"
 
@@ -173,7 +176,7 @@ function run_ollama() {
     err "${LINENO}" "ollama returned an error: $(jq -rs '[.[] | .error // empty] | join("; ")' "$response_file")"
   fi
   if [[ ! -s "$output_file" ]]; then
-    err "${LINENO}" "ollama returned an empty response (model=${MODEL}, num_ctx=${NUM_CTX}). Check ollama logs / increase NUM_CTX."
+    err "${LINENO}" "ollama returned an empty response (model=${model}, num_ctx=${NUM_CTX}). Check ollama logs / increase NUM_CTX."
   fi
   # jq -j does not append a trailing newline; add one for consistency.
   echo >>"$output_file"
@@ -203,7 +206,9 @@ function strip_markdown_fence() {
 }
 
 function run_claude() {
-  [[ $# -eq 3 ]] || err "${LINENO}" "run_claude requires 3 args"
+  [[ $# -eq 4 ]] || err "${LINENO}" "run_claude requires 4 args"
+  local model="$1"
+  shift
   local template_file="$1" input_file="$2" output_file="$3"
 
   command -v claude >/dev/null 2>&1 || err "${LINENO}" "claude CLI not found in PATH"
@@ -239,16 +244,16 @@ function run_claude() {
   #     conversational preamble/postamble and markdown code fences.
   local system_prompt="You are a plain text transformation tool with no knowledge of any project, repository, codebase, or filesystem. Output only the exact content requested by the user instructions. Do not add any preamble, explanation, markdown code fences, or closing remarks before or after the output."
   readonly system_prompt
-  log_info "Running claude -p (model=${MODEL}); output appears when done"
+  log_info "Running claude -p (model=${model}); output appears when done"
   if ! claude -p --safe-mode --tools "" --system-prompt "$system_prompt" \
-    --model "$MODEL" <"$prompt_file" >"$output_file"; then
-    err "${LINENO}" "claude -p failed (model=${MODEL})"
+    --model "$model" --effort high <"$prompt_file" >"$output_file"; then
+    err "${LINENO}" "claude -p failed (model=${model})"
   fi
 
   strip_markdown_fence "$output_file"
 
   if [[ ! -s "$output_file" ]]; then
-    err "${LINENO}" "claude returned an empty response (model=${MODEL})"
+    err "${LINENO}" "claude returned an empty response (model=${model})"
   fi
 }
 
@@ -263,7 +268,7 @@ function run_agent() {
 function main() {
   local verbose=0
   local input_file=""
-  local agent="ollama" agent_model=""
+  local agent="ollama" proofread_model="" summarize_model=""
 
   while [[ $# -gt 0 ]]; do
     case $1 in
@@ -284,13 +289,22 @@ function main() {
       agent="$2"
       shift 2
       ;;
-    -m | --model)
+    --proofread-model)
       if [[ $# -lt 2 ]]; then
         log_err "Missing value for $1"
         usage >&2
         exit 1
       fi
-      agent_model="$2"
+      proofread_model="$2"
+      shift 2
+      ;;
+    --summarize-model)
+      if [[ $# -lt 2 ]]; then
+        log_err "Missing value for $1"
+        usage >&2
+        exit 1
+      fi
+      summarize_model="$2"
       shift 2
       ;;
     -*)
@@ -325,17 +339,24 @@ function main() {
     ;;
   esac
 
-  if [[ -z "$agent_model" ]]; then
+  if [[ -z "$proofread_model" ]]; then
     if [[ "$agent" == "claude" ]]; then
-      agent_model="sonnet"
+      proofread_model="haiku"
     else
-      agent_model="${MODEL:-gemma4:12b-it-qat}"
+      proofread_model="gemma4:4b-it-qat"
+    fi
+  fi
+  if [[ -z "$summarize_model" ]]; then
+    if [[ "$agent" == "claude" ]]; then
+      summarize_model="sonnet"
+    else
+      summarize_model="gemma4:12b-it-qat"
     fi
   fi
   AGENT="$agent"
-  MODEL="$agent_model"
-  # shellcheck disable=SC2034
-  readonly AGENT MODEL
+  PROOFREAD_MODEL="$proofread_model"
+  SUMMARIZE_MODEL="$summarize_model"
+  readonly AGENT PROOFREAD_MODEL SUMMARIZE_MODEL
 
   if [[ ! -f "$input_file" || ! -r "$input_file" ]]; then
     log_err "File not found or not readable: ${input_file}"
@@ -392,14 +413,14 @@ function main() {
     cp "$cp_proofread" "$interim_proofread"
   else
     log_info "Running proofread stage"
-    run_agent "$proofread_prompt" "$interim_asr" "$interim_proofread"
+    run_agent "$PROOFREAD_MODEL" "$proofread_prompt" "$interim_asr" "$interim_proofread"
     log_info "Copying proofread result to checkpoint: ${cp_proofread}"
     cp "$interim_proofread" "$cp_proofread"
   fi
 
   # Stage: summarize (LLM agent)
   log_info "Running summarize stage"
-  run_agent "$summarize_prompt" "$interim_proofread" "$interim_summary"
+  run_agent "$SUMMARIZE_MODEL" "$summarize_prompt" "$interim_proofread" "$interim_summary"
   log_info "Copying summary result to checkpoint: ${cp_summary}"
   cp "$interim_summary" "$cp_summary"
 
