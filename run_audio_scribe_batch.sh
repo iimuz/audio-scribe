@@ -44,26 +44,25 @@ OPTIONS:
   -h, --help         Show this help message
   -v, --verbose      Enable verbose output (set -x)
   -a, --agent AGENT  LLM agent: ollama or claude (passed through to run_audio_scribe.sh)
-  -m, --model MODEL  Model name in the selected agent's format
-                     (passed through to run_audio_scribe.sh)
+  --proofread-model MODEL   Model for proofreading (passed through to run_audio_scribe.sh)
+  --summarize-model MODEL   Model for summarization (passed through to run_audio_scribe.sh)
 
 ENV:
   HF_TOKEN   HuggingFace token (passed through to run_audio_scribe.sh)
-  MODEL      ollama model (used only for ollama agent when --model is not given; passed through to run_audio_scribe.sh)
   API_URL    ollama API endpoint (passed through to run_audio_scribe.sh)
   NUM_CTX    ollama context window in tokens (passed through to run_audio_scribe.sh)
 
 EXAMPLES:
   ${SCRIPT_NAME} /path/to/recordings
   ${SCRIPT_NAME} --verbose ./meetings
-  ${SCRIPT_NAME} --agent claude --model haiku ./meetings
+  ${SCRIPT_NAME} --agent claude --summarize-model haiku ./meetings
 EOF
 }
 
 function main() {
   local verbose=0
   local target_dir=""
-  local agent="" agent_model=""
+  local agent="" proofread_model="" summarize_model=""
 
   while [[ $# -gt 0 ]]; do
     case $1 in
@@ -84,13 +83,22 @@ function main() {
       agent="$2"
       shift 2
       ;;
-    -m | --model)
+    --proofread-model)
       if [[ $# -lt 2 ]]; then
         log_err "Missing value for $1"
         usage >&2
         exit 1
       fi
-      agent_model="$2"
+      proofread_model="$2"
+      shift 2
+      ;;
+    --summarize-model)
+      if [[ $# -lt 2 ]]; then
+        log_err "Missing value for $1"
+        usage >&2
+        exit 1
+      fi
+      summarize_model="$2"
       shift 2
       ;;
     -*)
@@ -147,7 +155,8 @@ function main() {
 
   local child_args=()
   [[ -n "$agent" ]] && child_args+=(--agent "$agent")
-  [[ -n "$agent_model" ]] && child_args+=(--model "$agent_model")
+  [[ -n "$proofread_model" ]] && child_args+=(--proofread-model "$proofread_model")
+  [[ -n "$summarize_model" ]] && child_args+=(--summarize-model "$summarize_model")
 
   local succeeded=0
   local failed_files=()
