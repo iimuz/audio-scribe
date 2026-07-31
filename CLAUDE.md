@@ -21,12 +21,13 @@ OPTIONS:
   -h, --help         ヘルプを表示
   -v, --verbose      set -x で詳細ログ
   -a, --agent AGENT  LLM agent (ollama | claude; 既定: ollama)
-  -m, --model MODEL  モデル名 (選択した agent の書式に従う;
-                     既定: ollama=gemma4:12b-it-qat, claude=sonnet)
+  --proofread-model MODEL   校正用モデル
+                            (既定: ollama=gemma4:4b-it-qat, claude=haiku)
+  --summarize-model MODEL   要約用モデル
+                            (既定: ollama=gemma4:12b-it-qat, claude=sonnet)
 
 ENV:
   HF_TOKEN   HuggingFace トークン (話者分離に必要; 未設定時は dummy で続行し警告)
-  MODEL      ollama モデル (--model 未指定時に使用; 既定: gemma4:12b-it-qat)
   API_URL    ollama API エンドポイント (既定: http://localhost:11434/api/generate)
   NUM_CTX    ollama のコンテキスト長 (トークン; 既定: 16384)
 ```
@@ -37,10 +38,14 @@ ENV:
 2. `whisperx` で WAV を文字起こし → `data/interim/<base>.srt`
    (model `large-v3-turbo`、`--diarize` で話者分離、`--language ja`、CPU/int8)。
    結果を `video_dir/<base>-asr.srt` へコピーして永続化。
-3. LLM agent (既定: ollama、`--agent claude` で claude CLI) に 2 段階でテキストを渡す:
+3. LLM agent (既定: ollama、`--agent claude` で claude CLI) に 2 段階でテキストを渡す。
+   校正と要約はそれぞれ別モデルを使う (`--proofread-model` / `--summarize-model`
+   で個別に指定可能):
    - 校正: `data/interim/<base>.srt` → `data/interim/<base>-proofread.srt`、
-     `video_dir/<base>-proofread.srt` へコピー。
+     `video_dir/<base>-proofread.srt` へコピー。軽量モデルを使用
+     (既定: ollama=`gemma4:4b-it-qat`, claude=`haiku`)。
    - 要約: `data/interim/<base>-proofread.srt` → `video_dir/<base>-summary.md` (Markdown)。
+     通常モデルを使用 (既定: ollama=`gemma4:12b-it-qat`, claude=`sonnet`)。
 4. 正常完了後に `data/interim/<base>*` を削除 (中間ファイルのクリーンアップ)。
 
 ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.md](prompts/proofread.md)、
@@ -61,8 +66,10 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 `-s` で検出する。`jq -j` は末尾改行を付けないので、整合のため出力ファイルに改行を 1 つ追記する。
 
 `--agent claude` を指定した場合は ollama API の代わりに `claude -p` を実行する。
-プロンプトは stdin 経由で渡し、モデルは `--model` (既定: `sonnet`) を
-`claude -p --model` に渡す。出力はストリーミングせず完了時にまとめて受信する。
+プロンプトは stdin 経由で渡し、モデルはステップごとに異なる値
+(`--proofread-model` 既定 `haiku` / `--summarize-model` 既定 `sonnet`) を
+`claude -p --model` に渡す。effort はセッション設定に依存させないため常に
+`--effort high` を付与する。出力はストリーミングせず完了時にまとめて受信する。
 バックエンドは `--safe-mode --tools ""` (リポジトリカスタマイズなしのサンドボックス化) と
 `--system-prompt` による完全置換 (このリポジトリへの一切の認識を排除し、純粋なテキスト変換にする)
 で実行され、さらに防御的な `strip_markdown_fence` 後処理でフェンス行を除去したうえで、
