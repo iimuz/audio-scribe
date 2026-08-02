@@ -98,7 +98,8 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 ## ツールとコマンド
 
 ツールバージョンは [mise.toml](mise.toml) で固定 (ffmpeg, node, pnpm, python, uv)。
-`.env` が mise 経由で読み込まれる。lint / format の入口は mise タスクに統一している。
+`.env` が mise 経由で読み込まれる。Python 仮想環境・依存は `uv` で管理する。
+lint / format の入口は mise タスクに統一している。
 
 - セットアップ: `mise run setup` (pnpm install と lefthook install)
 - クリーンアップ: `mise run clean` (node_modules と .venv の削除)

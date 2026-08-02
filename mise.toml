@@ -62,6 +62,9 @@ fi
 
 [tasks."format:cspell"]
 description = ".cspell.json の words を整列"
+usage = '''
+flag "--help" hide=#true
+'''
 run = '''
 jq '.words |= (map(ascii_downcase) | sort | unique)' .cspell.json >.cspell.json.tmp
 mv .cspell.json.tmp .cspell.json
