@@ -10,3 +10,94 @@ uv = "0.11.14"
 
 [env]
 _.file = ".env"
+
+[tasks.setup]
+description = "依存パッケージの導入と git hook のインストール"
+run = '''
+pnpm install
+# git worktree ではルートリポジトリ側の lefthook 設定を使うためスキップ
+if [ -d ".git" ]; then
+  pnpm exec lefthook install
+fi
+'''
+
+[tasks.clean]
+description = "setup が生成したファイルの削除"
+run = '''
+git clean -fdx node_modules
+rm -rf .venv
+'''
+
+[tasks."format:sh"]
+description = "shfmt でシェルスクリプトを整形 (--check で崩れを検査)"
+usage = '''
+arg "[files]" var=#true
+flag "--check"
+'''
+run = '''
+files=${usage_files:-$(git ls-files -co --exclude-standard '*.sh' | tr '\n' ' ')}
+if [ -z "$files" ]; then exit 0; fi
+eval "set -- $files"
+if [ -n "${usage_check:-}" ]; then
+  shfmt -d "$@"
+else
+  shfmt -w "$@"
+fi
+'''
+
+[tasks."format:yaml"]
+description = "prettier で YAML を整形 (--check で崩れを検査)"
+usage = '''
+arg "[files]" var=#true
+flag "--check"
+'''
+run = '''
+eval "set -- ${usage_files:-'**/*.{yml,yaml}'}"
+if [ -n "${usage_check:-}" ]; then
+  pnpm exec prettier --check "$@"
+else
+  pnpm exec prettier --write "$@"
+fi
+'''
+
+[tasks."format:cspell"]
+description = ".cspell.json の words を整列"
+run = '''
+jq '.words |= (map(ascii_downcase) | sort | unique)' .cspell.json >.cspell.json.tmp
+mv .cspell.json.tmp .cspell.json
+pnpm exec prettier --write .cspell.json
+'''
+
+[tasks.format]
+description = "全ファイルを整形"
+depends = ["format:sh", "format:yaml", "format:cspell"]
+
+[tasks."format:check"]
+description = "全ファイルの整形崩れを検査"
+depends = ["format:sh --check", "format:yaml --check"]
+
+[tasks."lint:sh"]
+description = "shellcheck でシェルスクリプトを検査"
+usage = '''
+arg "[files]" var=#true
+'''
+run = '''
+files=${usage_files:-$(git ls-files -co --exclude-standard '*.sh' | tr '\n' ' ')}
+if [ -z "$files" ]; then exit 0; fi
+eval "set -- $files"
+shellcheck -- "$@"
+'''
+
+[tasks."lint:cspell"]
+description = "cspell でスペルを検査"
+usage = '''
+arg "[files]" var=#true
+'''
+run = '''
+eval "set -- ${usage_files:-'.'}"
+pnpm exec cspell lint --no-progress --no-must-find-files "$@"
+'''
+
+[tasks.lint]
+description = "全ファイルを検査"
+depends = ["lint:sh", "format:yaml --check", "lint:cspell"]

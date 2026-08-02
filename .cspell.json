@@ -1,7 +1,25 @@
 {
   "version": "0.2",
   "language": "en",
-  "words": ["acodec", "argjson", "claude", "Eeuo", "haiku", "ollama", "pipefail", "postamble", "rawfile", "stdin", "whisperx"],
+  "words": [
+    "acodec",
+    "argjson",
+    "claude",
+    "eeuo",
+    "execve",
+    "gsub",
+    "haiku",
+    "iimuz",
+    "lefthook",
+    "meetdigest",
+    "ollama",
+    "pipefail",
+    "postamble",
+    "rawfile",
+    "stdin",
+    "whisperx",
+    "worktree"
+  ],
   "dictionaries": [
     "bash",
     "companies",
@@ -20,6 +38,9 @@
     "**/.git/**",
     "**/node_modules/**",
     "**/package-lock.json",
-    "requirements*.txt"
+    "pnpm-lock.yaml",
+    "requirements*.txt",
+    "docs/superpowers/**",
+    "docs/tmp/**"
   ]
 }
