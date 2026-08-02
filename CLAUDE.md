@@ -107,8 +107,9 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 - lint: `mise run lint` (shellcheck、prettier --check、cspell)
 - test: 未定義 (bats 導入 Issue で追加予定)
 
-粒度別タスク (`format:sh` / `format:yaml` / `format:cspell` / `lint:sh` /
-`lint:cspell`) はファイルを引数に取れる (例: `mise run format:sh run_audio_scribe.sh`)。
+粒度別タスク (`format:sh` / `format:yaml` / `lint:sh` / `lint:cspell`) はファイルを
+引数に取れる (例: `mise run format:sh run_audio_scribe.sh`)。`format:cspell` のみ
+引数を取らず、常に `.cspell.json` の words 整列のみを行う。
 
 Python ツールチェーンは現状 Python コードがないため mise タスクに含めない
 (削除予定):
@@ -125,8 +126,10 @@ ruff は `select = ["ALL"]` で全ルール有効、`data/` と `.vscode` は除
 [lefthook.yml](lefthook.yml) の pre-commit でステージ済みファイルに対し format と lint を実行:
 prettier (yaml)、ruff (format + `check --fix`)、shfmt (Bash 整形)、cspell 辞書
 (`.cspell.json`) の整列、shellcheck (Bash 静的検査)、spell check。
-ruff 以外の各ジョブは mise の粒度別タスクを staged files を引数として呼び出すため、
-コマンド定義は [mise.toml](mise.toml) に一元化されている。
+ruff を除く各ジョブは mise の粒度別タスクを呼び出すため、コマンド定義は
+[mise.toml](mise.toml) に一元化されている (ruff のみ `uv run` を直接実行)。
+staged files を引数として渡すのは cspell 辞書整列以外のジョブで、
+辞書整列は `mise run format:cspell` を無引数で呼ぶ。
 新語は `.cspell.json` に追加する (フックがアルファベット順に整列する)。
 
 ## 注意
