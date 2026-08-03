@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 [run_audio_scribe.sh](run_audio_scribe.sh) は入力ファイルを位置引数で受け取る:
 
-```
+```text
 Usage: run_audio_scribe.sh [OPTIONS] <video-or-audio-file>
 
 OPTIONS:
@@ -97,19 +97,23 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 
 ## ツールとコマンド
 
-ツールバージョンは [mise.toml](mise.toml) で固定 (ffmpeg, node, pnpm, python, uv)。
+ツールバージョンは [mise.toml](mise.toml) で固定
+(ffmpeg, node, pnpm, python, shellcheck, shfmt, taplo, uv, whisperx)。
 `.env` が mise 経由で読み込まれる。Python 仮想環境・依存は `uv` で管理する。
 lint / format の入口は mise タスクに統一している。
 
 - セットアップ: `mise run setup` (pnpm install と lefthook install)
 - クリーンアップ: `mise run clean` (node_modules と .venv の削除)
-- format: `mise run format` (shfmt、prettier (yaml)、`.cspell.json` の words 整列)
+- format: `mise run format` (shfmt、prettier (yaml / markdown)、taplo (toml)、
+  `.cspell.json` の words 整列)
 - format 検査: `mise run format:check`
-- lint: `mise run lint` (shellcheck、prettier --check、cspell)
+- lint: `mise run lint` (shellcheck、markdownlint-cli2、prettier --check
+  (yaml / markdown)、taplo --check、cspell)
 - test: 未定義 (bats 導入 Issue で追加予定)
 
-粒度別タスク (`format:sh` / `format:yaml` / `lint:sh` / `lint:cspell`) はファイルを
-引数に取れる (例: `mise run format:sh run_audio_scribe.sh`)。`format:cspell` のみ
+粒度別タスク (`format:sh` / `format:yaml` / `format:md` / `format:toml` /
+`lint:sh` / `lint:md` / `lint:cspell`) はファイルを引数に取れる
+(例: `mise run format:sh run_audio_scribe.sh`)。`format:cspell` のみ
 引数を取らず、常に `.cspell.json` の words 整列のみを行う。
 
 Python ツールチェーンは現状 Python コードがないため mise タスクに含めない
@@ -125,8 +129,10 @@ ruff は `select = ["ALL"]` で全ルール有効、`data/` と `.vscode` は除
 ## コミット時のフック
 
 [lefthook.yml](lefthook.yml) の pre-commit でステージ済みファイルに対し format と lint を実行:
-prettier (yaml)、ruff (format + `check --fix`)、shfmt (Bash 整形)、cspell 辞書
-(`.cspell.json`) の整列、shellcheck (Bash 静的検査)、spell check。
+prettier (yaml)、ruff (format + `check --fix`)、shfmt (Bash 整形)、markdown (Markdown
+整形)、toml (TOML 整形)、cspell 辞書 (`.cspell.json`) の整列、shellcheck (Bash 静的検査)、
+prettier-md-check (Markdown 整形検査)、markdownlint (Markdown 静的検査)、taplo-check
+(TOML 整形検査)、spell check。
 ruff を除く各ジョブは mise の粒度別タスクを呼び出すため、コマンド定義は
 [mise.toml](mise.toml) に一元化されている (ruff のみ `uv run` を直接実行)。
 staged files を引数として渡すのは cspell 辞書整列以外のジョブで、

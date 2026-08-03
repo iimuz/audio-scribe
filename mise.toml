@@ -5,6 +5,7 @@ pnpm = "10.33.4"
 python = "3.11.15"
 shellcheck = "0.11.0"
 shfmt = "v3.13.1"
+taplo = "0.10.0"
 "pipx:whisperx" = "v3.8.6"
 uv = "0.11.14"
 
@@ -60,6 +61,40 @@ else
 fi
 '''
 
+[tasks."format:md"]
+description = "prettier で Markdown を整形 (--check で崩れを検査)"
+usage = '''
+arg "[files]" var=#true
+flag "--check"
+'''
+run = '''
+files=${usage_files:-$(git ls-files -co --exclude-standard '*.md' | tr '\n' ' ')}
+if [ -z "$files" ]; then exit 0; fi
+eval "set -- $files"
+if [ -n "${usage_check:-}" ]; then
+  pnpm exec prettier --check "$@"
+else
+  pnpm exec prettier --write "$@"
+fi
+'''
+
+[tasks."format:toml"]
+description = "taplo で TOML を整形 (--check で崩れを検査)"
+usage = '''
+arg "[files]" var=#true
+flag "--check"
+'''
+run = '''
+files=${usage_files:-$(git ls-files -co --exclude-standard '*.toml' | tr '\n' ' ')}
+if [ -z "$files" ]; then exit 0; fi
+eval "set -- $files"
+if [ -n "${usage_check:-}" ]; then
+  taplo format --check "$@"
+else
+  taplo format "$@"
+fi
+'''
+
 [tasks."format:cspell"]
 description = ".cspell.json の words を整列"
 usage = '''
@@ -73,11 +108,22 @@ pnpm exec prettier --write .cspell.json
 
 [tasks.format]
 description = "全ファイルを整形"
-depends = ["format:sh", "format:yaml", "format:cspell"]
+depends = [
+  "format:sh",
+  "format:yaml",
+  "format:md",
+  "format:toml",
+  "format:cspell",
+]
 
 [tasks."format:check"]
 description = "全ファイルの整形崩れを検査"
-depends = ["format:sh --check", "format:yaml --check"]
+depends = [
+  "format:sh --check",
+  "format:yaml --check",
+  "format:md --check",
+  "format:toml --check",
+]
 
 [tasks."lint:sh"]
 description = "shellcheck でシェルスクリプトを検査"
@@ -89,6 +135,18 @@ files=${usage_files:-$(git ls-files -co --exclude-standard '*.sh' | tr '\n' ' ')
 if [ -z "$files" ]; then exit 0; fi
 eval "set -- $files"
 shellcheck -- "$@"
+'''
+
+[tasks."lint:md"]
+description = "markdownlint-cli2 で Markdown を検査"
+usage = '''
+arg "[files]" var=#true
+'''
+run = '''
+files=${usage_files:-$(git ls-files -co --exclude-standard '*.md' | tr '\n' ' ')}
+if [ -z "$files" ]; then exit 0; fi
+eval "set -- $files"
+pnpm exec markdownlint-cli2 "$@"
 '''
 
 [tasks."lint:cspell"]
@@ -103,4 +161,11 @@ pnpm exec cspell lint --no-progress --no-must-find-files "$@"
 
 [tasks.lint]
 description = "全ファイルを検査"
-depends = ["lint:sh", "format:yaml --check", "lint:cspell"]
+depends = [
+  "lint:sh",
+  "lint:md",
+  "format:yaml --check",
+  "format:md --check",
+  "format:toml --check",
+  "lint:cspell",
+]

@@ -22,6 +22,14 @@ pre-commit:
             glob: "*.sh"
             stage_fixed: true
             run: mise run format:sh {staged_files}
+          - name: markdown
+            glob: "*.md"
+            stage_fixed: true
+            run: mise run format:md {staged_files}
+          - name: toml
+            glob: "*.toml"
+            stage_fixed: true
+            run: mise run format:toml {staged_files}
           - name: sort cspell file
             glob: ".cspell.json"
             stage_fixed: true
@@ -40,6 +48,15 @@ pre-commit:
           - name: prettier
             glob: "*.{yml,yaml}"
             run: mise run format:yaml --check {staged_files}
+          - name: prettier-md-check
+            glob: "*.md"
+            run: mise run format:md --check {staged_files}
+          - name: markdownlint
+            glob: "*.md"
+            run: mise run lint:md {staged_files}
+          - name: taplo-check
+            glob: "*.toml"
+            run: mise run format:toml --check {staged_files}
           - name: shellcheck
             glob: "*.sh"
             run: mise run lint:sh {staged_files}
