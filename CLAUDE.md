@@ -103,13 +103,16 @@ lint / format の入口は mise タスクに統一している。
 
 - セットアップ: `mise run setup` (pnpm install と lefthook install)
 - クリーンアップ: `mise run clean` (node_modules と .venv の削除)
-- format: `mise run format` (shfmt、prettier (yaml)、`.cspell.json` の words 整列)
+- format: `mise run format` (shfmt、prettier (yaml / markdown)、taplo (toml)、
+  `.cspell.json` の words 整列)
 - format 検査: `mise run format:check`
-- lint: `mise run lint` (shellcheck、prettier --check、cspell)
+- lint: `mise run lint` (shellcheck、markdownlint-cli2、prettier --check
+  (yaml / markdown)、taplo --check、cspell)
 - test: 未定義 (bats 導入 Issue で追加予定)
 
-粒度別タスク (`format:sh` / `format:yaml` / `lint:sh` / `lint:cspell`) はファイルを
-引数に取れる (例: `mise run format:sh run_audio_scribe.sh`)。`format:cspell` のみ
+粒度別タスク (`format:sh` / `format:yaml` / `format:md` / `format:toml` /
+`lint:sh` / `lint:md` / `lint:cspell`) はファイルを引数に取れる
+(例: `mise run format:sh run_audio_scribe.sh`)。`format:cspell` のみ
 引数を取らず、常に `.cspell.json` の words 整列のみを行う。
 
 Python ツールチェーンは現状 Python コードがないため mise タスクに含めない
