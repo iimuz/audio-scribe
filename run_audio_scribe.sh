@@ -259,9 +259,9 @@ function run_claude() {
 
 function run_agent() {
   case $AGENT in
-  ollama) run_ollama "$@" ;;
-  claude) run_claude "$@" ;;
-  *) err "${LINENO}" "Unknown agent: ${AGENT}" ;;
+    ollama) run_ollama "$@" ;;
+    claude) run_claude "$@" ;;
+    *) err "${LINENO}" "Unknown agent: ${AGENT}" ;;
   esac
 }
 
@@ -272,55 +272,55 @@ function main() {
 
   while [[ $# -gt 0 ]]; do
     case $1 in
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    -v | --verbose)
-      verbose=1
-      shift
-      ;;
-    -a | --agent)
-      if [[ $# -lt 2 ]]; then
-        log_err "Missing value for $1"
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -v | --verbose)
+        verbose=1
+        shift
+        ;;
+      -a | --agent)
+        if [[ $# -lt 2 ]]; then
+          log_err "Missing value for $1"
+          usage >&2
+          exit 1
+        fi
+        agent="$2"
+        shift 2
+        ;;
+      --proofread-model)
+        if [[ $# -lt 2 ]]; then
+          log_err "Missing value for $1"
+          usage >&2
+          exit 1
+        fi
+        proofread_model="$2"
+        shift 2
+        ;;
+      --summarize-model)
+        if [[ $# -lt 2 ]]; then
+          log_err "Missing value for $1"
+          usage >&2
+          exit 1
+        fi
+        summarize_model="$2"
+        shift 2
+        ;;
+      -*)
+        log_err "Unknown option: $1"
         usage >&2
         exit 1
-      fi
-      agent="$2"
-      shift 2
-      ;;
-    --proofread-model)
-      if [[ $# -lt 2 ]]; then
-        log_err "Missing value for $1"
-        usage >&2
-        exit 1
-      fi
-      proofread_model="$2"
-      shift 2
-      ;;
-    --summarize-model)
-      if [[ $# -lt 2 ]]; then
-        log_err "Missing value for $1"
-        usage >&2
-        exit 1
-      fi
-      summarize_model="$2"
-      shift 2
-      ;;
-    -*)
-      log_err "Unknown option: $1"
-      usage >&2
-      exit 1
-      ;;
-    *)
-      if [[ -n "$input_file" ]]; then
-        log_err "Too many positional arguments"
-        usage >&2
-        exit 1
-      fi
-      input_file="$1"
-      shift
-      ;;
+        ;;
+      *)
+        if [[ -n "$input_file" ]]; then
+          log_err "Too many positional arguments"
+          usage >&2
+          exit 1
+        fi
+        input_file="$1"
+        shift
+        ;;
     esac
   done
 
@@ -331,12 +331,12 @@ function main() {
   fi
 
   case $agent in
-  ollama | claude) ;;
-  *)
-    log_err "Invalid agent: ${agent} (expected: ollama or claude)"
-    usage >&2
-    exit 1
-    ;;
+    ollama | claude) ;;
+    *)
+      log_err "Invalid agent: ${agent} (expected: ollama or claude)"
+      usage >&2
+      exit 1
+      ;;
   esac
 
   if [[ -z "$proofread_model" ]]; then

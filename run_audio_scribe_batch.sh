@@ -66,55 +66,55 @@ function main() {
 
   while [[ $# -gt 0 ]]; do
     case $1 in
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    -v | --verbose)
-      verbose=1
-      shift
-      ;;
-    -a | --agent)
-      if [[ $# -lt 2 ]]; then
-        log_err "Missing value for $1"
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -v | --verbose)
+        verbose=1
+        shift
+        ;;
+      -a | --agent)
+        if [[ $# -lt 2 ]]; then
+          log_err "Missing value for $1"
+          usage >&2
+          exit 1
+        fi
+        agent="$2"
+        shift 2
+        ;;
+      --proofread-model)
+        if [[ $# -lt 2 ]]; then
+          log_err "Missing value for $1"
+          usage >&2
+          exit 1
+        fi
+        proofread_model="$2"
+        shift 2
+        ;;
+      --summarize-model)
+        if [[ $# -lt 2 ]]; then
+          log_err "Missing value for $1"
+          usage >&2
+          exit 1
+        fi
+        summarize_model="$2"
+        shift 2
+        ;;
+      -*)
+        log_err "Unknown option: $1"
         usage >&2
         exit 1
-      fi
-      agent="$2"
-      shift 2
-      ;;
-    --proofread-model)
-      if [[ $# -lt 2 ]]; then
-        log_err "Missing value for $1"
-        usage >&2
-        exit 1
-      fi
-      proofread_model="$2"
-      shift 2
-      ;;
-    --summarize-model)
-      if [[ $# -lt 2 ]]; then
-        log_err "Missing value for $1"
-        usage >&2
-        exit 1
-      fi
-      summarize_model="$2"
-      shift 2
-      ;;
-    -*)
-      log_err "Unknown option: $1"
-      usage >&2
-      exit 1
-      ;;
-    *)
-      if [[ -n "$target_dir" ]]; then
-        log_err "Too many positional arguments"
-        usage >&2
-        exit 1
-      fi
-      target_dir="$1"
-      shift
-      ;;
+        ;;
+      *)
+        if [[ -n "$target_dir" ]]; then
+          log_err "Too many positional arguments"
+          usage >&2
+          exit 1
+        fi
+        target_dir="$1"
+        shift
+        ;;
     esac
   done
 

@@ -39,9 +39,9 @@ files=${usage_files:-$(git ls-files -co --exclude-standard '*.sh' | tr '\n' ' ')
 if [ -z "$files" ]; then exit 0; fi
 eval "set -- $files"
 if [ -n "${usage_check:-}" ]; then
-  shfmt -d "$@"
+  shfmt -d -i 2 -ci "$@"
 else
-  shfmt -w "$@"
+  shfmt -w -i 2 -ci "$@"
 fi
 '''
 
