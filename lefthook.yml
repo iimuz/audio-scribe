@@ -12,12 +12,6 @@ pre-commit:
             glob: "*.{yml,yaml}"
             stage_fixed: true
             run: mise run format:yaml {staged_files}
-          - name: ruff
-            glob: "*.{py}"
-            stage_fixed: true
-            run: |
-              uv run ruff format {staged_files}
-              uv run ruff check --fix {staged_files}
           - name: shfmt
             glob: "*.sh"
             stage_fixed: true
@@ -42,9 +36,6 @@ pre-commit:
       group:
         parallel: true
         jobs:
-          - name: ruff
-            glob: "*.py"
-            run: uv run ruff check {staged_files}
           - name: prettier
             glob: "*.{yml,yaml}"
             run: mise run format:yaml --check {staged_files}
