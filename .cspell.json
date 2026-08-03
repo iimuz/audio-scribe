@@ -16,6 +16,7 @@
     "pipefail",
     "postamble",
     "rawfile",
+    "setext",
     "stdin",
     "whisperx",
     "worktree"

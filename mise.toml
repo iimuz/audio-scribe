@@ -60,6 +60,23 @@ else
 fi
 '''
 
+[tasks."format:md"]
+description = "prettier で Markdown を整形 (--check で崩れを検査)"
+usage = '''
+arg "[files]" var=#true
+flag "--check"
+'''
+run = '''
+files=${usage_files:-$(git ls-files -co --exclude-standard '*.md' | tr '\n' ' ')}
+if [ -z "$files" ]; then exit 0; fi
+eval "set -- $files"
+if [ -n "${usage_check:-}" ]; then
+  pnpm exec prettier --check "$@"
+else
+  pnpm exec prettier --write "$@"
+fi
+'''
+
 [tasks."format:cspell"]
 description = ".cspell.json の words を整列"
 usage = '''
@@ -73,11 +90,11 @@ pnpm exec prettier --write .cspell.json
 
 [tasks.format]
 description = "全ファイルを整形"
-depends = ["format:sh", "format:yaml", "format:cspell"]
+depends = ["format:sh", "format:yaml", "format:md", "format:cspell"]
 
 [tasks."format:check"]
 description = "全ファイルの整形崩れを検査"
-depends = ["format:sh --check", "format:yaml --check"]
+depends = ["format:sh --check", "format:yaml --check", "format:md --check"]
 
 [tasks."lint:sh"]
 description = "shellcheck でシェルスクリプトを検査"
@@ -103,4 +120,4 @@ pnpm exec cspell lint --no-progress --no-must-find-files "$@"
 
 [tasks.lint]
 description = "全ファイルを検査"
-depends = ["lint:sh", "format:yaml --check", "lint:cspell"]
+depends = ["lint:sh", "format:yaml --check", "format:md --check", "lint:cspell"]

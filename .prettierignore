@@ -3,3 +3,9 @@
 .venv/
 node_modules/
 pnpm-lock.yaml
+docs/superpowers/
+docs/tmp/
+.superpowers/
+# LLM プロンプトの生テキスト。prettier の setext 見出し解釈で `---` 区切りが
+# `##` 見出しに変換され意味が変わるため対象外にする。
+prompts/
