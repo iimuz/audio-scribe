@@ -99,21 +99,38 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 
 ツールバージョンは [mise.toml](mise.toml) で固定 (ffmpeg, node, pnpm, python, uv)。
 `.env` が mise 経由で読み込まれる。Python 仮想環境・依存は `uv` で管理する。
+lint / format の入口は mise タスクに統一している。
+
+- セットアップ: `mise run setup` (pnpm install と lefthook install)
+- クリーンアップ: `mise run clean` (node_modules と .venv の削除)
+- format: `mise run format` (shfmt、prettier (yaml)、`.cspell.json` の words 整列)
+- format 検査: `mise run format:check`
+- lint: `mise run lint` (shellcheck、prettier --check、cspell)
+- test: 未定義 (bats 導入 Issue で追加予定)
+
+粒度別タスク (`format:sh` / `format:yaml` / `lint:sh` / `lint:cspell`) はファイルを
+引数に取れる (例: `mise run format:sh run_audio_scribe.sh`)。`format:cspell` のみ
+引数を取らず、常に `.cspell.json` の words 整列のみを行う。
+
+Python ツールチェーンは現状 Python コードがないため mise タスクに含めない
+(削除予定):
 
 - Python lint: `uv run ruff check .`
 - Python format: `uv run ruff format .`
 - 型チェック: `uv run mypy .`
 - テスト: `uv run pytest` (現状テストコードは未配置)
-- spell check: `pnpm cspell lint --no-progress <files>`
-- prettier (yaml): `npx prettier --check '**/*.{yml,yaml}'`
 
 ruff は `select = ["ALL"]` で全ルール有効、`data/` と `.vscode` は除外。
 
 ## コミット時のフック
 
 [lefthook.yml](lefthook.yml) の pre-commit でステージ済みファイルに対し format と lint を実行:
-prettier (yaml)、ruff (format + `check --fix`)、shfmt (Bash 整形)、cspell の整列、
-shellcheck (Bash 静的検査)、spell check。
+prettier (yaml)、ruff (format + `check --fix`)、shfmt (Bash 整形)、cspell 辞書
+(`.cspell.json`) の整列、shellcheck (Bash 静的検査)、spell check。
+ruff を除く各ジョブは mise の粒度別タスクを呼び出すため、コマンド定義は
+[mise.toml](mise.toml) に一元化されている (ruff のみ `uv run` を直接実行)。
+staged files を引数として渡すのは cspell 辞書整列以外のジョブで、
+辞書整列は `mise run format:cspell` を無引数で呼ぶ。
 新語は `.cspell.json` に追加する (フックがアルファベット順に整列する)。
 
 ## 注意

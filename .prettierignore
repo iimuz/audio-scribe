@@ -2,3 +2,4 @@
 .ruff_cache/
 .venv/
 node_modules/
+pnpm-lock.yaml
