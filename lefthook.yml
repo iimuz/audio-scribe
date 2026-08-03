@@ -47,6 +47,9 @@ pre-commit:
           - name: prettier-md-check
             glob: "*.md"
             run: mise run format:md --check {staged_files}
+          - name: markdownlint
+            glob: "*.md"
+            run: mise run lint:md {staged_files}
           - name: shellcheck
             glob: "*.sh"
             run: mise run lint:sh {staged_files}

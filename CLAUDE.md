@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 [run_audio_scribe.sh](run_audio_scribe.sh) は入力ファイルを位置引数で受け取る:
 
-```
+```text
 Usage: run_audio_scribe.sh [OPTIONS] <video-or-audio-file>
 
 OPTIONS:

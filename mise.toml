@@ -108,6 +108,18 @@ eval "set -- $files"
 shellcheck -- "$@"
 '''
 
+[tasks."lint:md"]
+description = "markdownlint-cli2 で Markdown を検査"
+usage = '''
+arg "[files]" var=#true
+'''
+run = '''
+files=${usage_files:-$(git ls-files -co --exclude-standard '*.md' | tr '\n' ' ')}
+if [ -z "$files" ]; then exit 0; fi
+eval "set -- $files"
+pnpm exec markdownlint-cli2 "$@"
+'''
+
 [tasks."lint:cspell"]
 description = "cspell でスペルを検査"
 usage = '''
@@ -120,4 +132,4 @@ pnpm exec cspell lint --no-progress --no-must-find-files "$@"
 
 [tasks.lint]
 description = "全ファイルを検査"
-depends = ["lint:sh", "format:yaml --check", "format:md --check", "lint:cspell"]
+depends = ["lint:sh", "lint:md", "format:yaml --check", "format:md --check", "lint:cspell"]
