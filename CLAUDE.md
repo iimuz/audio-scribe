@@ -97,7 +97,8 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 
 ## ツールとコマンド
 
-ツールバージョンは [mise.toml](mise.toml) で固定 (ffmpeg, node, pnpm, python, uv)。
+ツールバージョンは [mise.toml](mise.toml) で固定
+(ffmpeg, node, pnpm, python, shellcheck, shfmt, taplo, uv, whisperx)。
 `.env` が mise 経由で読み込まれる。Python 仮想環境・依存は `uv` で管理する。
 lint / format の入口は mise タスクに統一している。
 
@@ -128,8 +129,10 @@ ruff は `select = ["ALL"]` で全ルール有効、`data/` と `.vscode` は除
 ## コミット時のフック
 
 [lefthook.yml](lefthook.yml) の pre-commit でステージ済みファイルに対し format と lint を実行:
-prettier (yaml)、ruff (format + `check --fix`)、shfmt (Bash 整形)、cspell 辞書
-(`.cspell.json`) の整列、shellcheck (Bash 静的検査)、spell check。
+prettier (yaml)、ruff (format + `check --fix`)、shfmt (Bash 整形)、markdown (Markdown
+整形)、toml (TOML 整形)、cspell 辞書 (`.cspell.json`) の整列、shellcheck (Bash 静的検査)、
+prettier-md-check (Markdown 整形検査)、markdownlint (Markdown 静的検査)、taplo-check
+(TOML 整形検査)、spell check。
 ruff を除く各ジョブは mise の粒度別タスクを呼び出すため、コマンド定義は
 [mise.toml](mise.toml) に一元化されている (ruff のみ `uv run` を直接実行)。
 staged files を引数として渡すのは cspell 辞書整列以外のジョブで、
