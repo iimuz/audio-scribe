@@ -1,4 +1,5 @@
 [tools]
+bats = "1.14.0"
 ffmpeg = "7.1.1"
 node = "24.16.0"
 pnpm = "10.33.4"
@@ -167,3 +168,11 @@ depends = [
   "format:toml --check",
   "lint:cspell",
 ]
+
+[tasks.test]
+depends = ["test:sh"]
+description = "全テストを実行"
+
+[tasks."test:sh"]
+description = "bats でシェルテストを実行"
+run = "bats tests/"
