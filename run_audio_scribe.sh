@@ -265,6 +265,24 @@ function run_agent() {
   esac
 }
 
+# Returns the default model name for the given agent and step.
+function default_model_for() {
+  local agent="$1"
+  local step="$2"
+  case "${agent}:${step}" in
+    ollama:proofread) echo "gemma4:4b-it-qat" ;;
+    ollama:summarize) echo "gemma4:12b-it-qat" ;;
+    claude:proofread) echo "haiku" ;;
+    claude:summarize) echo "sonnet" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Returns 0 if the checkpoint file exists and is non-empty.
+function has_checkpoint() {
+  [[ -s "$1" ]]
+}
+
 function main() {
   local verbose=0
   local input_file=""
@@ -340,18 +358,10 @@ function main() {
   esac
 
   if [[ -z "$proofread_model" ]]; then
-    if [[ "$agent" == "claude" ]]; then
-      proofread_model="haiku"
-    else
-      proofread_model="gemma4:4b-it-qat"
-    fi
+    proofread_model=$(default_model_for "$agent" "proofread")
   fi
   if [[ -z "$summarize_model" ]]; then
-    if [[ "$agent" == "claude" ]]; then
-      summarize_model="sonnet"
-    else
-      summarize_model="gemma4:12b-it-qat"
-    fi
+    summarize_model=$(default_model_for "$agent" "summarize")
   fi
   AGENT="$agent"
   PROOFREAD_MODEL="$proofread_model"
@@ -390,7 +400,7 @@ function main() {
   readonly proofread_prompt summarize_prompt
 
   # Requirement 8: final result already exists, nothing to do
-  if [[ -s "$cp_summary" ]]; then
+  if has_checkpoint "$cp_summary"; then
     log_info "Final result already exists: ${cp_summary}. Nothing to do."
     exit 0
   fi
@@ -398,7 +408,7 @@ function main() {
   mkdir -p "$INTERIM_DIR"
 
   # Stage: whisperx (ASR)
-  if [[ -s "$cp_asr" ]]; then
+  if has_checkpoint "$cp_asr"; then
     log_info "ASR checkpoint found, skipping whisperx: ${cp_asr}"
     cp "$cp_asr" "$interim_asr"
   else
@@ -408,7 +418,7 @@ function main() {
   fi
 
   # Stage: proofread (LLM agent)
-  if [[ -s "$cp_proofread" ]]; then
+  if has_checkpoint "$cp_proofread"; then
     log_info "Proofread checkpoint found, skipping: ${cp_proofread}"
     cp "$cp_proofread" "$interim_proofread"
   else
