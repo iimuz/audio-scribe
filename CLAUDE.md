@@ -130,12 +130,20 @@ staged files を引数として渡すのは cspell 辞書整列と test 以外�
 
 ## CI
 
-[.github/workflows/ci.yml](.github/workflows/ci.yml) が pull_request をトリガーに
-lint (`mise run lint`)、format (`mise run format:check`)、test (`mise run test`) を
-並列実行し、`status-check` ジョブが全ジョブの結果を集約する (branch protection の
-required check は `status-check` を想定)。ツール導入は jdx/mise-action で行い、
-CI に不要な重量ツール (`pipx:whisperx` / `ffmpeg` / `uv`) は `MISE_DISABLE_TOOLS`
-で無効化する。ランナーは `ubuntu-24.04-arm`。action は commit SHA でピン留めする。
+[.github/workflows/ci.yml](.github/workflows/ci.yml) が pull_request と main への
+push をトリガーに lint (`mise run lint`)、format (`mise run format:check`)、
+test (`mise run test`) を並列実行し、`status-check` ジョブが全ジョブの結果を集約する
+(branch protection の required check は `status-check` を想定)。ツール導入は
+jdx/mise-action で行い、CI に不要な重量ツール (`pipx:whisperx` / `ffmpeg` / `uv`) は
+`MISE_DISABLE_TOOLS` で無効化する。ランナーは `ubuntu-24.04-arm`。action は commit
+SHA でピン留めする。
+
+main への push でも実行するのは、GitHub Actions のキャッシュがブランチスコープで
+隔離されているため。pull_request の実行では merge ref (`refs/pull/N/merge`) の
+スコープにしかキャッシュを書けず、default branch のスコープにキャッシュを作れるのは
+push などのトリガーに限られる。これがないと新規 PR は毎回ツールを再インストールする
+ことになる。mise-action のツールキャッシュは既定で有効 (`cache: true`) で、キーは
+mise.toml の内容ハッシュから生成されるため個別設定は不要。
 
 ## 注意
 
