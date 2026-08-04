@@ -2,7 +2,6 @@
 ffmpeg = "7.1.1"
 node = "24.16.0"
 pnpm = "10.33.4"
-python = "3.11.15"
 shellcheck = "0.11.0"
 shfmt = "v3.13.1"
 taplo = "0.10.0"
@@ -26,7 +25,6 @@ fi
 description = "setup が生成したファイルの削除"
 run = '''
 git clean -fdx node_modules
-rm -rf .venv
 '''
 
 [tasks."format:sh"]
