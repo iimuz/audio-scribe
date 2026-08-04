@@ -16,8 +16,8 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly SCRIPT_DIR
 
 # Global constants (overridable via env)
-# AGENT, PROOFREAD_MODEL, and SUMMARIZE_MODEL are resolved in main() after
-# argument parsing.
+# AGENT, PROOFREAD_MODEL, SUMMARIZE_MODEL, INPUT_FILE, and VERBOSE are set
+# by parse_args().
 : "${API_URL:=http://localhost:11434/api/generate}"
 readonly API_URL
 # Proofread regenerates the full transcript, so the context window must hold
