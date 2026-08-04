@@ -6,8 +6,6 @@
 # Required tools: bash, find, sort
 # Required sibling: run_audio_scribe.sh (must be in the same directory)
 
-set -Eeuo pipefail
-
 SCRIPT_NAME=$(basename "${0}")
 readonly SCRIPT_NAME
 
@@ -30,8 +28,6 @@ function err() {
   log_err "Line $1: $2"
   exit 1
 }
-
-trap 'err ${LINENO} "$BASH_COMMAND"' ERR
 
 function usage() {
   cat <<EOF
@@ -59,7 +55,9 @@ EXAMPLES:
 EOF
 }
 
-function main() {
+# Parses CLI arguments. Sets readonly globals:
+#   TARGET_DIR, VERBOSE, CHILD_ARGS
+function parse_args() {
   local verbose=0
   local target_dir=""
   local agent="" proofread_model="" summarize_model=""
@@ -124,17 +122,29 @@ function main() {
     exit 1
   fi
 
+  TARGET_DIR="$target_dir"
+  VERBOSE="$verbose"
+  CHILD_ARGS=()
+  [[ -n "$agent" ]] && CHILD_ARGS+=(--agent "$agent")
+  [[ -n "$proofread_model" ]] && CHILD_ARGS+=(--proofread-model "$proofread_model")
+  [[ -n "$summarize_model" ]] && CHILD_ARGS+=(--summarize-model "$summarize_model")
+  readonly TARGET_DIR VERBOSE CHILD_ARGS
+}
+
+function main() {
+  parse_args "$@"
+
   if [[ ! -r "$CHILD_SCRIPT" ]]; then
     log_err "Child script not found or not readable: ${CHILD_SCRIPT}"
     exit 1
   fi
 
-  if [[ ! -d "$target_dir" ]]; then
-    log_err "Target directory not found or not a directory: ${target_dir}"
+  if [[ ! -d "$TARGET_DIR" ]]; then
+    log_err "Target directory not found or not a directory: ${TARGET_DIR}"
     exit 1
   fi
 
-  if [[ "$verbose" -eq 1 ]]; then
+  if [[ "$VERBOSE" -eq 1 ]]; then
     set -x
   fi
 
@@ -142,21 +152,16 @@ function main() {
   local files=()
   while IFS= read -r -d '' file; do
     files+=("$file")
-  done < <(find "$target_dir" -type f -iname '*.mov' -print0 | sort -z)
+  done < <(find "$TARGET_DIR" -type f -iname '*.mov' -print0 | sort -z)
 
   local total="${#files[@]}"
 
   if [[ "$total" -eq 0 ]]; then
-    log_info "No .mov files found under ${target_dir}"
+    log_info "No .mov files found under ${TARGET_DIR}"
     exit 0
   fi
 
-  log_info "Found ${total} .mov file(s) under ${target_dir}"
-
-  local child_args=()
-  [[ -n "$agent" ]] && child_args+=(--agent "$agent")
-  [[ -n "$proofread_model" ]] && child_args+=(--proofread-model "$proofread_model")
-  [[ -n "$summarize_model" ]] && child_args+=(--summarize-model "$summarize_model")
+  log_info "Found ${total} .mov file(s) under ${TARGET_DIR}"
 
   local succeeded=0
   local failed_files=()
@@ -165,7 +170,7 @@ function main() {
   for file in "${files[@]}"; do
     i=$((i + 1))
     log_info "[${i}/${total}] Processing: ${file}"
-    if bash "$CHILD_SCRIPT" "${child_args[@]}" "$file"; then
+    if bash "$CHILD_SCRIPT" "${CHILD_ARGS[@]}" "$file"; then
       succeeded=$((succeeded + 1))
       log_info "[${i}/${total}] Succeeded: ${file}"
     else
@@ -189,5 +194,7 @@ function main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -Eeuo pipefail
+  trap 'err ${LINENO} "$BASH_COMMAND"' ERR
   main "$@"
 fi
