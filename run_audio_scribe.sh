@@ -9,8 +9,6 @@
 #   API_URL    ollama API endpoint (default: http://localhost:11434/api/generate)
 #   NUM_CTX    ollama context window in tokens (default: 16384)
 
-set -Eeuo pipefail
-
 SCRIPT_NAME=$(basename "${0}")
 readonly SCRIPT_NAME
 
@@ -49,9 +47,6 @@ function err() {
   log_err "Line $1: $2"
   exit 1
 }
-
-trap 'err ${LINENO} "$BASH_COMMAND"' ERR
-trap 'cleanup_tmp' EXIT
 
 function cleanup_tmp() {
   if [[ ${#TMP_FILES[@]} -gt 0 ]]; then
@@ -451,5 +446,8 @@ function main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -Eeuo pipefail
+  trap 'err ${LINENO} "$BASH_COMMAND"' ERR
+  trap 'cleanup_tmp' EXIT
   main "$@"
 fi
