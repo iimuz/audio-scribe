@@ -97,7 +97,7 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 ## ツールとコマンド
 
 ツールバージョンは [mise.toml](mise.toml) で固定
-(ffmpeg, node, pnpm, shellcheck, shfmt, taplo, uv, whisperx)。
+(bats, ffmpeg, node, pnpm, shellcheck, shfmt, taplo, uv, whisperx)。
 `.env` が mise 経由で読み込まれる。`uv` は whisperx (pipx バックエンド) の
 インストールに使用する。lint / format の入口は mise タスクに統一している。
 
@@ -108,25 +108,25 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 - format 検査: `mise run format:check`
 - lint: `mise run lint` (shellcheck、markdownlint-cli2、prettier --check
   (yaml / markdown)、taplo --check、cspell)
-- test: 未定義 (bats 導入 Issue で追加予定)
+- test: `mise run test` (bats による `tests/*.bats` の実行)
 
 粒度別タスク (`format:sh` / `format:yaml` / `format:md` / `format:toml` /
 `lint:sh` / `lint:md` / `lint:cspell`) はファイルを引数に取れる
-(例: `mise run format:sh run_audio_scribe.sh`)。`format:cspell` のみ
-引数を取らず、常に `.cspell.json` の words 整列のみを行う。
+(例: `mise run format:sh run_audio_scribe.sh`)。`format:cspell` と `test:sh` のみ
+引数を取らず、それぞれ常に `.cspell.json` の words 整列と全 bats スイート実行を行う。
 
 ## コミット時のフック
 
-[lefthook.yml](lefthook.yml) の pre-commit でステージ済みファイルに対し format と lint を実行:
+[lefthook.yml](lefthook.yml) の pre-commit でステージ済みファイルに対し format と lint を実行、test も並行実行:
 prettier (yaml)、shfmt (Bash 整形)、markdown (Markdown 整形)、toml (TOML 整形)、
 cspell 辞書 (`.cspell.json`) の整列、shellcheck (Bash 静的検査)、prettier-md-check
 (Markdown 整形検査)、markdownlint (Markdown 静的検査)、taplo-check (TOML 整形検査)、
 spell check。
 各ジョブは mise の粒度別タスクを呼び出すため、コマンド定義は
 [mise.toml](mise.toml) に一元化されている。
-staged files を引数として渡すのは cspell 辞書整列以外のジョブで、
-辞書整列は `mise run format:cspell` を無引数で呼ぶ。
-新語は `.cspell.json` に追加する (フックがアルファベット順に整列する)。
+staged files を引数として渡すのは cspell 辞書整列と test 以外のジョブで、
+辞書整列は `mise run format:cspell` を無引数で呼び、test も無引数で `mise run test:sh`
+を呼ぶ (bats 全件実行)。新語は `.cspell.json` に追加する (フックがアルファベット順に整列する)。
 
 ## 注意
 

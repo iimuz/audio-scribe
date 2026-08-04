@@ -53,3 +53,10 @@ pre-commit:
             run: mise run lint:sh {staged_files}
           - name: spell check
             run: mise run lint:cspell {staged_files}
+    - name: test
+      skip:
+        - rebase
+        - merge
+        - revert
+      glob: "*.{sh,bats}"
+      run: mise run test:sh
