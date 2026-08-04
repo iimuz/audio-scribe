@@ -9,8 +9,6 @@
 #   API_URL    ollama API endpoint (default: http://localhost:11434/api/generate)
 #   NUM_CTX    ollama context window in tokens (default: 16384)
 
-set -Eeuo pipefail
-
 SCRIPT_NAME=$(basename "${0}")
 readonly SCRIPT_NAME
 
@@ -18,8 +16,8 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly SCRIPT_DIR
 
 # Global constants (overridable via env)
-# AGENT, PROOFREAD_MODEL, and SUMMARIZE_MODEL are resolved in main() after
-# argument parsing.
+# AGENT, PROOFREAD_MODEL, SUMMARIZE_MODEL, INPUT_FILE, and VERBOSE are set
+# by parse_args().
 : "${API_URL:=http://localhost:11434/api/generate}"
 readonly API_URL
 # Proofread regenerates the full transcript, so the context window must hold
@@ -49,9 +47,6 @@ function err() {
   log_err "Line $1: $2"
   exit 1
 }
-
-trap 'err ${LINENO} "$BASH_COMMAND"' ERR
-trap 'cleanup_tmp' EXIT
 
 function cleanup_tmp() {
   if [[ ${#TMP_FILES[@]} -gt 0 ]]; then
@@ -265,7 +260,27 @@ function run_agent() {
   esac
 }
 
-function main() {
+# Returns the default model name for the given agent and step.
+function default_model_for() {
+  local agent="$1"
+  local step="$2"
+  case "${agent}:${step}" in
+    ollama:proofread) echo "gemma4:4b-it-qat" ;;
+    ollama:summarize) echo "gemma4:12b-it-qat" ;;
+    claude:proofread) echo "haiku" ;;
+    claude:summarize) echo "sonnet" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Returns 0 if the checkpoint file exists and is non-empty.
+function has_checkpoint() {
+  [[ -s "$1" ]]
+}
+
+# Parses CLI arguments and resolves defaults. Sets readonly globals:
+#   AGENT, PROOFREAD_MODEL, SUMMARIZE_MODEL, INPUT_FILE, VERBOSE
+function parse_args() {
   local verbose=0
   local input_file=""
   local agent="ollama" proofread_model="" summarize_model=""
@@ -340,37 +355,36 @@ function main() {
   esac
 
   if [[ -z "$proofread_model" ]]; then
-    if [[ "$agent" == "claude" ]]; then
-      proofread_model="haiku"
-    else
-      proofread_model="gemma4:4b-it-qat"
-    fi
+    proofread_model=$(default_model_for "$agent" "proofread")
   fi
   if [[ -z "$summarize_model" ]]; then
-    if [[ "$agent" == "claude" ]]; then
-      summarize_model="sonnet"
-    else
-      summarize_model="gemma4:12b-it-qat"
-    fi
+    summarize_model=$(default_model_for "$agent" "summarize")
   fi
+
   AGENT="$agent"
   PROOFREAD_MODEL="$proofread_model"
   SUMMARIZE_MODEL="$summarize_model"
-  readonly AGENT PROOFREAD_MODEL SUMMARIZE_MODEL
+  INPUT_FILE="$input_file"
+  VERBOSE="$verbose"
+  readonly AGENT PROOFREAD_MODEL SUMMARIZE_MODEL INPUT_FILE VERBOSE
+}
 
-  if [[ ! -f "$input_file" || ! -r "$input_file" ]]; then
-    log_err "File not found or not readable: ${input_file}"
+function main() {
+  parse_args "$@"
+
+  if [[ ! -f "$INPUT_FILE" || ! -r "$INPUT_FILE" ]]; then
+    log_err "File not found or not readable: ${INPUT_FILE}"
     exit 1
   fi
 
-  if [[ "$verbose" -eq 1 ]]; then
+  if [[ "$VERBOSE" -eq 1 ]]; then
     set -x
   fi
 
   local base video_dir
-  base=$(basename "$input_file")
+  base=$(basename "$INPUT_FILE")
   base="${base%.*}"
-  video_dir=$(cd "$(dirname "$input_file")" && pwd)
+  video_dir=$(cd "$(dirname "$INPUT_FILE")" && pwd)
   readonly base video_dir
 
   # Derived paths
@@ -390,7 +404,7 @@ function main() {
   readonly proofread_prompt summarize_prompt
 
   # Requirement 8: final result already exists, nothing to do
-  if [[ -s "$cp_summary" ]]; then
+  if has_checkpoint "$cp_summary"; then
     log_info "Final result already exists: ${cp_summary}. Nothing to do."
     exit 0
   fi
@@ -398,17 +412,17 @@ function main() {
   mkdir -p "$INTERIM_DIR"
 
   # Stage: whisperx (ASR)
-  if [[ -s "$cp_asr" ]]; then
+  if has_checkpoint "$cp_asr"; then
     log_info "ASR checkpoint found, skipping whisperx: ${cp_asr}"
     cp "$cp_asr" "$interim_asr"
   else
-    extract_audio "$input_file" "$interim_wav"
+    extract_audio "$INPUT_FILE" "$interim_wav"
     transcribe "$interim_wav" "$INTERIM_DIR" "$cp_asr"
     # interim_asr is the whisperx default output
   fi
 
   # Stage: proofread (LLM agent)
-  if [[ -s "$cp_proofread" ]]; then
+  if has_checkpoint "$cp_proofread"; then
     log_info "Proofread checkpoint found, skipping: ${cp_proofread}"
     cp "$cp_proofread" "$interim_proofread"
   else
@@ -432,5 +446,8 @@ function main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -Eeuo pipefail
+  trap 'err ${LINENO} "$BASH_COMMAND"' ERR
+  trap 'cleanup_tmp' EXIT
   main "$@"
 fi
