@@ -170,9 +170,11 @@ depends = [
 ]
 
 [tasks.test]
-depends = ["test:sh"]
 description = "全テストを実行"
+depends = ["test:sh"]
 
 [tasks."test:sh"]
 description = "bats でシェルテストを実行"
-run = "bats tests/"
+run = '''
+bats tests/
+'''
