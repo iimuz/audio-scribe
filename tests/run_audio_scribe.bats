@@ -56,3 +56,43 @@ setup() {
   [ "$status" -eq 0 ]
   [ ! -s "$file" ]
 }
+
+@test "parse_args: 既定値は ollama と gemma モデル" {
+  parse_args "$BATS_TEST_TMPDIR/input.mov"
+  [ "$AGENT" = "ollama" ]
+  [ "$PROOFREAD_MODEL" = "gemma4:4b-it-qat" ]
+  [ "$SUMMARIZE_MODEL" = "gemma4:12b-it-qat" ]
+  [ "$INPUT_FILE" = "$BATS_TEST_TMPDIR/input.mov" ]
+  [ "$VERBOSE" = "0" ]
+}
+
+@test "parse_args: --agent claude でモデル既定値が切り替わる" {
+  parse_args --agent claude "$BATS_TEST_TMPDIR/input.mov"
+  [ "$AGENT" = "claude" ]
+  [ "$PROOFREAD_MODEL" = "haiku" ]
+  [ "$SUMMARIZE_MODEL" = "sonnet" ]
+}
+
+@test "parse_args: モデルの明示指定は既定値より優先される" {
+  parse_args --proofread-model custom-a --summarize-model custom-b "$BATS_TEST_TMPDIR/input.mov"
+  [ "$PROOFREAD_MODEL" = "custom-a" ]
+  [ "$SUMMARIZE_MODEL" = "custom-b" ]
+}
+
+@test "parse_args: 不正オプションで exit 1" {
+  run parse_args --unknown "$BATS_TEST_TMPDIR/input.mov"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown option: --unknown"* ]]
+}
+
+@test "parse_args: 不正な agent 値で exit 1" {
+  run parse_args --agent gpt "$BATS_TEST_TMPDIR/input.mov"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Invalid agent: gpt"* ]]
+}
+
+@test "parse_args: 入力ファイル欠落で exit 1" {
+  run parse_args
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Missing required argument"* ]]
+}
