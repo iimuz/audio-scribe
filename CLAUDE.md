@@ -97,7 +97,7 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 ## ツールとコマンド
 
 ツールバージョンは [mise.toml](mise.toml) で固定
-(ffmpeg, node, pnpm, shellcheck, shfmt, taplo, uv, whisperx)。
+(bats, ffmpeg, node, pnpm, shellcheck, shfmt, taplo, uv, whisperx)。
 `.env` が mise 経由で読み込まれる。`uv` は whisperx (pipx バックエンド) の
 インストールに使用する。lint / format の入口は mise タスクに統一している。
 
@@ -108,7 +108,7 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 - format 検査: `mise run format:check`
 - lint: `mise run lint` (shellcheck、markdownlint-cli2、prettier --check
   (yaml / markdown)、taplo --check、cspell)
-- test: 未定義 (bats 導入 Issue で追加予定)
+- test: `mise run test` (bats による tests/\*.bats の実行)
 
 粒度別タスク (`format:sh` / `format:yaml` / `format:md` / `format:toml` /
 `lint:sh` / `lint:md` / `lint:cspell`) はファイルを引数に取れる
@@ -127,6 +127,8 @@ spell check。
 staged files を引数として渡すのは cspell 辞書整列以外のジョブで、
 辞書整列は `mise run format:cspell` を無引数で呼ぶ。
 新語は `.cspell.json` に追加する (フックがアルファベット順に整列する)。
+format / lint と同列で test ジョブも実行され、`*.sh` / `*.bats` の変更があると
+staged files を渡さず `mise run test:sh` (bats 全件実行) が走る。
 
 ## 注意
 
