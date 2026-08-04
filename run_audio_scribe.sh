@@ -283,7 +283,9 @@ function has_checkpoint() {
   [[ -s "$1" ]]
 }
 
-function main() {
+# Parses CLI arguments and resolves defaults. Sets readonly globals:
+#   AGENT, PROOFREAD_MODEL, SUMMARIZE_MODEL, INPUT_FILE, VERBOSE
+function parse_args() {
   local verbose=0
   local input_file=""
   local agent="ollama" proofread_model="" summarize_model=""
@@ -363,24 +365,31 @@ function main() {
   if [[ -z "$summarize_model" ]]; then
     summarize_model=$(default_model_for "$agent" "summarize")
   fi
+
   AGENT="$agent"
   PROOFREAD_MODEL="$proofread_model"
   SUMMARIZE_MODEL="$summarize_model"
-  readonly AGENT PROOFREAD_MODEL SUMMARIZE_MODEL
+  INPUT_FILE="$input_file"
+  VERBOSE="$verbose"
+  readonly AGENT PROOFREAD_MODEL SUMMARIZE_MODEL INPUT_FILE VERBOSE
+}
 
-  if [[ ! -f "$input_file" || ! -r "$input_file" ]]; then
-    log_err "File not found or not readable: ${input_file}"
+function main() {
+  parse_args "$@"
+
+  if [[ ! -f "$INPUT_FILE" || ! -r "$INPUT_FILE" ]]; then
+    log_err "File not found or not readable: ${INPUT_FILE}"
     exit 1
   fi
 
-  if [[ "$verbose" -eq 1 ]]; then
+  if [[ "$VERBOSE" -eq 1 ]]; then
     set -x
   fi
 
   local base video_dir
-  base=$(basename "$input_file")
+  base=$(basename "$INPUT_FILE")
   base="${base%.*}"
-  video_dir=$(cd "$(dirname "$input_file")" && pwd)
+  video_dir=$(cd "$(dirname "$INPUT_FILE")" && pwd)
   readonly base video_dir
 
   # Derived paths
@@ -412,7 +421,7 @@ function main() {
     log_info "ASR checkpoint found, skipping whisperx: ${cp_asr}"
     cp "$cp_asr" "$interim_asr"
   else
-    extract_audio "$input_file" "$interim_wav"
+    extract_audio "$INPUT_FILE" "$interim_wav"
     transcribe "$interim_wav" "$INTERIM_DIR" "$cp_asr"
     # interim_asr is the whisperx default output
   fi
