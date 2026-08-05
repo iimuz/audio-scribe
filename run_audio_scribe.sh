@@ -7,7 +7,7 @@
 #   HF_TOKEN   HuggingFace token for speaker diarization.
 #              If unset or empty, falls back to "dummy" with a warning.
 #   API_URL    ollama API endpoint (default: http://localhost:11434/api/generate)
-#   NUM_CTX    ollama context window in tokens (default: 16384)
+#   NUM_CTX    ollama context window in tokens (default: 131072)
 
 SCRIPT_NAME=$(basename "${0}")
 readonly SCRIPT_NAME
@@ -76,7 +76,7 @@ OPTIONS:
 ENV:
   HF_TOKEN   HuggingFace token (required for diarization; falls back to dummy)
   API_URL    ollama API (default: http://localhost:11434/api/generate)
-  NUM_CTX    ollama context window in tokens (default: 16384)
+  NUM_CTX    ollama context window in tokens (default: 131072)
 
 EXAMPLES:
   ${SCRIPT_NAME} meeting.mov

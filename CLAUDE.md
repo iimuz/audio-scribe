@@ -28,7 +28,7 @@ OPTIONS:
 ENV:
   HF_TOKEN   HuggingFace トークン (話者分離に必要; 未設定時は dummy で続行し警告)
   API_URL    ollama API エンドポイント (既定: http://localhost:11434/api/generate)
-  NUM_CTX    ollama のコンテキスト長 (トークン; 既定: 16384)
+  NUM_CTX    ollama のコンテキスト長 (トークン; 既定: 131072)
 ```
 
 処理の流れ (`base` = 拡張子なしのファイル名、`video_dir` = 入力ファイルの親ディレクトリ):
@@ -51,7 +51,7 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 [prompts/summarize.md](prompts/summarize.md)) に記述し、`{{INPUT}}` プレースホルダに
 書き起こしテキストが差し込まれる。リクエストは `jq --rawfile` + `curl --data-binary @file`
 でファイル経由して送信する。リクエストの `options` には `temperature: 0` と `num_ctx`
-(既定 16384) を指定する。校正は入力 SRT 全文を再生成するため、`num_ctx` が小さいと応答が
+(既定 131072) を指定する。校正は入力 SRT 全文を再生成するため、`num_ctx` が小さいと応答が
 空になり得る (空応答は下記のガードで検出)。
 
 レスポンスは `stream: true` でストリーミング受信する (生成完了まで何も表示されないのを避け、
