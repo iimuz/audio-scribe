@@ -15,6 +15,7 @@
     "ollama",
     "pipefail",
     "postamble",
+    "pyannote",
     "rawfile",
     "renovatebot",
     "setext",
