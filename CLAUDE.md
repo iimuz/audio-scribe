@@ -145,6 +145,20 @@ push などのトリガーに限られる。これがないと新規 PR は毎�
 ことになる。mise-action のツールキャッシュは既定で有効 (`cache: true`) で、キーは
 mise.toml の内容ハッシュから生成されるため個別設定は不要。
 
+## Renovate
+
+[.github/workflows/renovate.yml](.github/workflows/renovate.yml) が self-hosted
+Renovate (renovatebot/github-action) を週次 (土曜 15:00 UTC) と
+workflow_dispatch (log_level を choice 入力で指定可能) で実行する。
+設定は [renovate.json](renovate.json) にあり、mise ツール・npm
+devDependencies・GitHub Actions を更新対象とする。major / minor は種別
+(github-actions / npm / mise / other) ごとにグルーピングし、patch / pin /
+digest は automerge する (branch protection の required check である
+status-check の通過が前提)。minimumReleaseAge は 14 days (pin / digest は
+0 days)。デフォルトの GITHUB_TOKEN では Renovate の PR で CI がトリガー
+されないため、repo scope (workflow 含む) の PAT をリポジトリ secret
+RENOVATE_TOKEN に登録して使う。
+
 ## 注意
 
 [docs/reports/2026-05-31-directory-structure.md](docs/reports/2026-05-31-directory-structure.md)
