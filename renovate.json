@@ -1,0 +1,93 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", "helpers:pinGitHubActionDigests"],
+  "ignorePresets": ["security:minimumReleaseAgeNpm"],
+  "dependencyDashboard": false,
+  "minimumReleaseAge": "14 days",
+  "statusCheckNames": {
+    "minimumReleaseAge": null
+  },
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 5,
+  "labels": ["dependencies", "automerge"],
+  "packageRules": [
+    {
+      "description": "Skip minimum release age for pin and digest updates",
+      "matchUpdateTypes": ["pin", "digest"],
+      "minimumReleaseAge": "0 days"
+    },
+    {
+      "description": "Group all other major updates",
+      "matchUpdateTypes": ["major"],
+      "groupName": "other (major)"
+    },
+    {
+      "description": "Group all other minor updates",
+      "matchUpdateTypes": ["minor"],
+      "groupName": "other (minor)"
+    },
+    {
+      "description": "Group and automerge all other patch updates",
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "groupName": "other (patch)",
+      "automerge": true
+    },
+    {
+      "description": "Group GitHub Actions major updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "github-actions (major)"
+    },
+    {
+      "description": "Group GitHub Actions minor updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor"],
+      "groupName": "github-actions (minor)"
+    },
+    {
+      "description": "Group and automerge GitHub Actions patch updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "groupName": "github-actions (patch)",
+      "automerge": true
+    },
+    {
+      "description": "Group npm/Node.js major updates",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "npm (major)"
+    },
+    {
+      "description": "Group npm/Node.js minor updates",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor"],
+      "groupName": "npm (minor)"
+    },
+    {
+      "description": "Group and automerge npm/Node.js patch updates",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "groupName": "npm (patch)",
+      "automerge": true
+    },
+    {
+      "description": "Group mise major updates",
+      "matchManagers": ["mise"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "mise (major)"
+    },
+    {
+      "description": "Group mise minor updates",
+      "matchManagers": ["mise"],
+      "matchUpdateTypes": ["minor"],
+      "groupName": "mise (minor)"
+    },
+    {
+      "description": "Group and automerge mise patch updates",
+      "matchManagers": ["mise"],
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "groupName": "mise (patch)",
+      "automerge": true
+    }
+  ]
+}
