@@ -128,6 +128,8 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が
 - lint: `mise run lint` (shellcheck、markdownlint-cli2、prettier --check
   (yaml / markdown)、taplo --check、cspell)
 - test: `mise run test` (bats による `tests/*.bats` の実行)
+- launchd: `mise run launchd:install` / `mise run launchd:uninstall` (定期実行の
+  導入・解除)、`mise run launchd:logs` (実行ログの追跡)
 
 粒度別タスク (`format:sh` / `format:yaml` / `format:md` / `format:toml` /
 `lint:sh` / `lint:md` / `lint:cspell`) はファイルを引数に取れる

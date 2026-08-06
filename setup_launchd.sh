@@ -12,13 +12,9 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly SCRIPT_DIR
 
 readonly LAUNCHD_LABEL="com.iimuz.audio-scribe"
-export LAUNCHD_LABEL
 readonly TEMPLATE_FILE="${SCRIPT_DIR}/${LAUNCHD_LABEL}.plist.template"
-export TEMPLATE_FILE
 readonly PLIST_DEST="${HOME}/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
-export PLIST_DEST
 readonly LOG_PATH="${HOME}/Library/Logs/audio-scribe.log"
-export LOG_PATH
 
 function log_info() {
   local message="$1"
@@ -79,10 +75,36 @@ function validate_schedule_value() {
   fi
 }
 
+# Escapes &, < and > for safe embedding in plist XML text nodes.
+function xml_escape() {
+  local value="$1"
+  value="${value//&/\&amp;}"
+  value="${value//</\&lt;}"
+  value="${value//>/\&gt;}"
+  printf '%s' "$value"
+}
+
+# Escapes a string for safe use as the replacement text of
+# ${content//pattern/replacement}: bash treats an unescaped "&" there as
+# "the text matched by pattern" (sed-style), so a literal "&" (e.g. from
+# xml_escape's "&amp;") must be backslash-escaped, and literal backslashes
+# escaped in turn, or it gets swallowed/misinterpreted during substitution.
+function bash_repl_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//&/\\&}"
+  printf '%s' "$value"
+}
+
 # Renders TEMPLATE_FILE to stdout, replacing {{...}} placeholders.
 # render_plist <mise-bin> <repo-dir> <hour> <minute> <log-path>
 function render_plist() {
-  local mise_bin="$1" repo_dir="$2" hour="$3" minute="$4" log_path="$5"
+  local mise_bin repo_dir hour minute log_path
+  mise_bin=$(bash_repl_escape "$(xml_escape "$1")")
+  repo_dir=$(bash_repl_escape "$(xml_escape "$2")")
+  hour=$(bash_repl_escape "$(xml_escape "$3")")
+  minute=$(bash_repl_escape "$(xml_escape "$4")")
+  log_path=$(bash_repl_escape "$(xml_escape "$5")")
   local content
   content=$(<"$TEMPLATE_FILE")
   content="${content//\{\{MISE_BIN\}\}/${mise_bin}}"
@@ -164,30 +186,37 @@ function cmd_install() {
   validate_schedule_value "AUDIO_SCRIBE_SCHEDULE_MINUTE" "$minute" 59 || exit 1
 
   if [[ -z "${AUDIO_SCRIBE_TARGET_DIR:-}" ]]; then
-    log_info "WARNING: AUDIO_SCRIBE_TARGET_DIR is not set. Set it in .env before the first scheduled run."
+    log_err "WARNING: AUDIO_SCRIBE_TARGET_DIR is not set. Set it in .env before the first scheduled run."
   fi
 
   mkdir -p "$(dirname "$PLIST_DEST")" "$(dirname "$LOG_PATH")"
+  : >>"$LOG_PATH"
 
   local rendered
   rendered=$(render_plist "$mise_bin" "$SCRIPT_DIR" "$hour" "$minute" "$LOG_PATH")
-  printf '%s\n' "$rendered" >"$PLIST_DEST"
 
+  local tmp_plist="${PLIST_DEST}.tmp.$$"
+  printf '%s\n' "$rendered" >"$tmp_plist"
   if command -v plutil >/dev/null 2>&1; then
-    plutil -lint "$PLIST_DEST" >/dev/null
+    if ! plutil -lint "$tmp_plist" >/dev/null; then
+      rm -f "$tmp_plist"
+      log_err "Rendered plist failed validation"
+      exit 1
+    fi
   fi
+  mv "$tmp_plist" "$PLIST_DEST"
 
   # Reload if already loaded so that reinstall is idempotent.
-  launchctl bootout "gui/$(id -u)" "$PLIST_DEST" 2>/dev/null || true
+  launchctl bootout "gui/$(id -u)/${LAUNCHD_LABEL}" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$PLIST_DEST"
 
   log_info "Installed launchd agent: ${LAUNCHD_LABEL}"
-  log_info "Schedule: daily at ${hour}:$(printf '%02d' "$((10#$minute))")"
+  log_info "Schedule: daily at $(printf '%02d' "$((10#$hour))"):$(printf '%02d' "$((10#$minute))")"
   log_info "Log file: ${LOG_PATH}"
 }
 
 function cmd_uninstall() {
-  launchctl bootout "gui/$(id -u)" "$PLIST_DEST" 2>/dev/null || true
+  launchctl bootout "gui/$(id -u)/${LAUNCHD_LABEL}" 2>/dev/null || true
   rm -f "$PLIST_DEST"
   log_info "Uninstalled launchd agent: ${LAUNCHD_LABEL}"
 }

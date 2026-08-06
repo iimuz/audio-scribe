@@ -52,3 +52,18 @@ setup() {
   [[ "$output" == *"run_audio_scribe_batch.sh"* ]]
   [[ "$output" == *"AUDIO_SCRIBE_TARGET_DIR"* ]]
 }
+
+@test "render_plist: 未置換のプレースホルダが残る場合はエラー" {
+  cp "$BATS_TEST_DIRNAME/../setup_launchd.sh" "$BATS_TEST_TMPDIR/"
+  printf '<string>{{UNKNOWN}}</string>\n' >"$BATS_TEST_TMPDIR/com.iimuz.audio-scribe.plist.template"
+  run bash -c "source '$BATS_TEST_TMPDIR/setup_launchd.sh'; render_plist a b 3 0 c"
+  [ "$status" -ne 0 ]
+}
+
+@test "render_plist: リポジトリパスの & < > を XML エスケープする" {
+  run render_plist "/opt/homebrew/bin/mise" "/path/to/repo & <test>" "3" "0" "/path/to/log & <test>"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"<string>/path/to/repo &amp; &lt;test&gt;</string>"* ]]
+  [[ "$output" == *"<string>/path/to/log &amp; &lt;test&gt;</string>"* ]]
+  [[ "$output" != *"{{"* ]]
+}
