@@ -147,6 +147,11 @@ function parse_args() {
 }
 
 function cmd_install() {
+  if [[ ! -r "$TEMPLATE_FILE" ]]; then
+    log_err "Template not found or not readable: ${TEMPLATE_FILE}"
+    exit 1
+  fi
+
   local mise_bin
   if ! mise_bin=$(command -v mise); then
     log_err "mise not found in PATH"
@@ -192,11 +197,6 @@ function main() {
 
   if [[ "$VERBOSE" -eq 1 ]]; then
     set -x
-  fi
-
-  if [[ ! -r "$TEMPLATE_FILE" ]]; then
-    log_err "Template not found or not readable: ${TEMPLATE_FILE}"
-    exit 1
   fi
 
   case "$COMMAND" in
