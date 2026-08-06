@@ -97,9 +97,112 @@ function render_plist() {
   printf '%s\n' "$content"
 }
 
+# Parses CLI arguments. Sets readonly globals: COMMAND, VERBOSE
+function parse_args() {
+  local verbose=0
+  local command=""
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -v | --verbose)
+        verbose=1
+        shift
+        ;;
+      -*)
+        log_err "Unknown option: $1"
+        usage >&2
+        exit 1
+        ;;
+      *)
+        if [[ -n "$command" ]]; then
+          log_err "Too many positional arguments"
+          usage >&2
+          exit 1
+        fi
+        command="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "$command" ]]; then
+    log_err "Missing required argument: <install|uninstall>"
+    usage >&2
+    exit 1
+  fi
+
+  if [[ "$command" != "install" && "$command" != "uninstall" ]]; then
+    log_err "Unknown command: ${command}"
+    usage >&2
+    exit 1
+  fi
+
+  COMMAND="$command"
+  VERBOSE="$verbose"
+  readonly COMMAND VERBOSE
+}
+
+function cmd_install() {
+  local mise_bin
+  if ! mise_bin=$(command -v mise); then
+    log_err "mise not found in PATH"
+    exit 1
+  fi
+
+  local hour="${AUDIO_SCRIBE_SCHEDULE_HOUR:-3}"
+  local minute="${AUDIO_SCRIBE_SCHEDULE_MINUTE:-0}"
+  validate_schedule_value "AUDIO_SCRIBE_SCHEDULE_HOUR" "$hour" 23 || exit 1
+  validate_schedule_value "AUDIO_SCRIBE_SCHEDULE_MINUTE" "$minute" 59 || exit 1
+
+  if [[ -z "${AUDIO_SCRIBE_TARGET_DIR:-}" ]]; then
+    log_info "WARNING: AUDIO_SCRIBE_TARGET_DIR is not set. Set it in .env before the first scheduled run."
+  fi
+
+  mkdir -p "$(dirname "$PLIST_DEST")" "$(dirname "$LOG_PATH")"
+
+  local rendered
+  rendered=$(render_plist "$mise_bin" "$SCRIPT_DIR" "$hour" "$minute" "$LOG_PATH")
+  printf '%s\n' "$rendered" >"$PLIST_DEST"
+
+  if command -v plutil >/dev/null 2>&1; then
+    plutil -lint "$PLIST_DEST" >/dev/null
+  fi
+
+  # Reload if already loaded so that reinstall is idempotent.
+  launchctl bootout "gui/$(id -u)" "$PLIST_DEST" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$PLIST_DEST"
+
+  log_info "Installed launchd agent: ${LAUNCHD_LABEL}"
+  log_info "Schedule: daily at ${hour}:$(printf '%02d' "$((10#$minute))")"
+  log_info "Log file: ${LOG_PATH}"
+}
+
+function cmd_uninstall() {
+  launchctl bootout "gui/$(id -u)" "$PLIST_DEST" 2>/dev/null || true
+  rm -f "$PLIST_DEST"
+  log_info "Uninstalled launchd agent: ${LAUNCHD_LABEL}"
+}
+
 function main() {
-  log_err "Not implemented yet"
-  exit 1
+  parse_args "$@"
+
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    set -x
+  fi
+
+  if [[ ! -r "$TEMPLATE_FILE" ]]; then
+    log_err "Template not found or not readable: ${TEMPLATE_FILE}"
+    exit 1
+  fi
+
+  case "$COMMAND" in
+    install) cmd_install ;;
+    uninstall) cmd_uninstall ;;
+  esac
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
