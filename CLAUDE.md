@@ -117,7 +117,7 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 
 ## コミット時のフック
 
-[lefthook.yml](lefthook.yml) の pre-commit でステージ済みファイルに対し format と lint を実行、test も並行実行:
+[lefthook.yml](lefthook.yml) の pre-commit でステージ済みファイルに対し format、lint、test の各ジョブを順次実行する (format / lint ジョブ内のサブジョブはそれぞれ並列実行):
 prettier (yaml)、shfmt (Bash 整形)、markdown (Markdown 整形)、toml (TOML 整形)、
 cspell 辞書 (`.cspell.json`) の整列、shellcheck (Bash 静的検査)、prettier-md-check
 (Markdown 整形検査)、markdownlint (Markdown 静的検査)、taplo-check (TOML 整形検査)、
