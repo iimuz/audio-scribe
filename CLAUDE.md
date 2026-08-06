@@ -94,18 +94,18 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が
 [com.iimuz.audio-scribe.plist.template](com.iimuz.audio-scribe.plist.template) を描画して
 `~/Library/LaunchAgents/com.iimuz.audio-scribe.plist` に配置し、launchd で
 `run_audio_scribe_batch.sh` を毎日定時実行する (`mise run launchd:install` /
-`mise run launchd:uninstall`)。実行ログは `mise run launchd:logs` で追跡できます。
+`mise run launchd:uninstall`)。実行ログは `mise run launchd:logs` で追跡できる。
 
 - plist は `mise exec -- bash -c 'exec ./run_audio_scribe_batch.sh "${AUDIO_SCRIBE_TARGET_DIR:?...}"'`
-  を WorkingDirectory=リポジトリで起動します。mise が .env とツール PATH を解決するため、
-  対象ディレクトリ (`AUDIO_SCRIBE_TARGET_DIR`) は実行時に .env から解決され、変更に再インストールは不要です。
+  を WorkingDirectory=リポジトリで起動する。mise が .env とツール PATH を解決するため、
+  対象ディレクトリ (`AUDIO_SCRIBE_TARGET_DIR`) は実行時に .env から解決され、変更に再インストールは不要。
 - スケジュール時刻 (`AUDIO_SCRIBE_SCHEDULE_HOUR` 既定 3 / `AUDIO_SCRIBE_SCHEDULE_MINUTE` 既定 0) は
-  インストール時に plist へ埋め込まれるため、変更時は `mise run launchd:install` の再実行が必要です。
-- 標準出力・標準エラーは `~/Library/Logs/audio-scribe.log` へ追記されます。ジョブ状態は
-  `launchctl print gui/$(id -u)/com.iimuz.audio-scribe` で確認できます。
-- launchd は同一ラベルのジョブ実行中は次回起動をスキップするためロック機構は持ちません。
+  インストール時に plist へ埋め込まれるため、変更時は `mise run launchd:install` の再実行が必要である。
+- 標準出力・標準エラーは `~/Library/Logs/audio-scribe.log` へ追記される。ジョブ状態は
+  `launchctl print gui/$(id -u)/com.iimuz.audio-scribe` で確認できる。
+- launchd は同一ラベルのジョブ実行中は次回起動をスキップするためロック機構は持たない。
 - テスト (`tests/setup_launchd.bats`) は描画・検証の純粋関数のみを対象とし、
-  launchctl / plutil / mise には依存しません (CI は ubuntu のため)。
+  launchctl / plutil / mise には依存しない (CI は ubuntu のため)。
 
 ## データディレクトリ
 
