@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.iimuz.audio-scribe</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>{{MISE_BIN}}</string>
+      <string>exec</string>
+      <string>--</string>
+      <string>bash</string>
+      <string>-c</string>
+      <string>exec ./run_audio_scribe_batch.sh "${AUDIO_SCRIBE_TARGET_DIR:?AUDIO_SCRIBE_TARGET_DIR is not set}"</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>{{REPO_DIR}}</string>
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>{{SCHEDULE_HOUR}}</integer>
+      <key>Minute</key>
+      <integer>{{SCHEDULE_MINUTE}}</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>{{LOG_PATH}}</string>
+    <key>StandardErrorPath</key>
+    <string>{{LOG_PATH}}</string>
+  </dict>
+</plist>
