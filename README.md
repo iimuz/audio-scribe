@@ -73,6 +73,47 @@ HF_TOKEN=hf_xxxxxxxxxxxxxxxx
 
 これらのファイルが非空で存在するステップは、再実行時にスキップされます。
 
+### Periodic Execution (launchd)
+
+macOS では launchd により毎日決まった時刻に `run_audio_scribe_batch.sh` を自動実行できます。
+
+1. `.env` に設定を記載する:
+
+   ```dotenv
+   # 処理対象ディレクトリ (必須。実行時に読み込まれる)
+   AUDIO_SCRIBE_TARGET_DIR=/path/to/recordings
+   # LLM agent (任意。既定は ollama。実行時に読み込まれるため変更に再インストールは不要)
+   AUDIO_SCRIBE_AGENT=claude
+   # 実行時刻 (任意。既定は 03:00。変更後は再インストールが必要)
+   AUDIO_SCRIBE_SCHEDULE_HOUR=3
+   AUDIO_SCRIBE_SCHEDULE_MINUTE=0
+   ```
+
+2. インストール (再実行すると設定を更新できる):
+
+   ```sh
+   mise run launchd:install
+   ```
+
+3. アンインストール:
+
+   ```sh
+   mise run launchd:uninstall
+   ```
+
+前提: 既定の agent (ollama) を使う場合、スケジュール実行時に ollama サーバーが起動している必要があります。
+
+ログと状態の確認:
+
+- 実行ログ: `mise run launchd:logs` (`tail -n 100 -f ~/Library/Logs/audio-scribe.log` 相当。macOS のコンソール.app からも閲覧可能)
+- ジョブの状態 (ロード状況・最終終了コード・次回実行): `launchctl print gui/$(id -u)/com.iimuz.audio-scribe`
+
+補足:
+
+- 同一ジョブの実行中はスケジュール時刻が来ても多重起動されません。
+- 処理済み (summary あり) のファイルはスキップされるため再実行は冪等です。
+- `AUDIO_SCRIBE_TARGET_DIR` の変更は次回実行から反映されます (再インストール不要です)。
+
 ## Development
 
 lint / format / test は mise タスクに統一されています。

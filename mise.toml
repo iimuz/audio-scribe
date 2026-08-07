@@ -178,3 +178,21 @@ description = "bats でシェルテストを実行"
 run = '''
 bats tests/
 '''
+
+[tasks."launchd:install"]
+description = "launchd agent を ~/Library/LaunchAgents に配置してロード (再実行で更新)"
+run = '''
+bash setup_launchd.sh install
+'''
+
+[tasks."launchd:uninstall"]
+description = "launchd agent をアンロードして plist を削除"
+run = '''
+bash setup_launchd.sh uninstall
+'''
+
+[tasks."launchd:logs"]
+description = "launchd agent の実行ログを表示 (tail -f で追跡)"
+run = '''
+tail -n 100 -f "${HOME}/Library/Logs/audio-scribe.log"
+'''

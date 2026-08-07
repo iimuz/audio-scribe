@@ -88,6 +88,28 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 `HF_TOKEN` は環境変数から読み込む。未設定または空の場合は警告を出して `dummy` で続行するが、
 話者分離は失敗しうる。実運用では `HF_TOKEN` を設定してから実行すること。
 
+## launchd による定期実行
+
+macOS では [setup_launchd.sh](setup_launchd.sh) が
+[com.iimuz.audio-scribe.plist.template](com.iimuz.audio-scribe.plist.template) を描画して
+`~/Library/LaunchAgents/com.iimuz.audio-scribe.plist` に配置し、launchd で
+`run_audio_scribe_batch.sh` を毎日定時実行する (`mise run launchd:install` /
+`mise run launchd:uninstall`)。実行ログは `mise run launchd:logs` で追跡できる。
+
+- plist は `mise exec -- bash -c 'exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${AUDIO_SCRIBE_TARGET_DIR:?...}"'`
+  を WorkingDirectory=リポジトリで起動する。mise が .env とツール PATH を解決するため、
+  対象ディレクトリ (`AUDIO_SCRIBE_TARGET_DIR`) と LLM agent (`AUDIO_SCRIBE_AGENT`、任意、
+  既定 ollama) は実行時に .env から解決され、変更に再インストールは不要。`${VAR:+...}` を
+  意図的に引用符で囲まないのは、未設定時に空文字列の引数を渡さないためであり、
+  agent の値は ollama / claude のみで空白を含まないため単語分割は問題にならない。
+- スケジュール時刻 (`AUDIO_SCRIBE_SCHEDULE_HOUR` 既定 3 / `AUDIO_SCRIBE_SCHEDULE_MINUTE` 既定 0) は
+  インストール時に plist へ埋め込まれるため、変更時は `mise run launchd:install` の再実行が必要である。
+- 標準出力・標準エラーは `~/Library/Logs/audio-scribe.log` へ追記される。ジョブ状態は
+  `launchctl print gui/$(id -u)/com.iimuz.audio-scribe` で確認できる。
+- launchd は同一ラベルのジョブ実行中は次回起動をスキップするためロック機構は持たない。
+- テスト (`tests/setup_launchd.bats`) は描画・検証の純粋関数のみを対象とし、
+  launchctl / plutil / mise には依存しない (CI は ubuntu のため)。
+
 ## データディレクトリ
 
 `data/{raw,interim,processed}/` は中身を git 管理しない (`.gitkeep` のみ追跡、
@@ -109,6 +131,8 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 - lint: `mise run lint` (shellcheck、markdownlint-cli2、prettier --check
   (yaml / markdown)、taplo --check、cspell)
 - test: `mise run test` (bats による `tests/*.bats` の実行)
+- launchd: `mise run launchd:install` / `mise run launchd:uninstall` (定期実行の
+  導入・解除)、`mise run launchd:logs` (実行ログの追跡)
 
 粒度別タスク (`format:sh` / `format:yaml` / `format:md` / `format:toml` /
 `lint:sh` / `lint:md` / `lint:cspell`) はファイルを引数に取れる
