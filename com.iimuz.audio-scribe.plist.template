@@ -11,7 +11,7 @@
       <string>--</string>
       <string>bash</string>
       <string>-c</string>
-      <string>exec ./run_audio_scribe_batch.sh "${AUDIO_SCRIBE_TARGET_DIR:?AUDIO_SCRIBE_TARGET_DIR is not set}"</string>
+      <string>exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${AUDIO_SCRIBE_TARGET_DIR:?AUDIO_SCRIBE_TARGET_DIR is not set}"</string>
     </array>
     <key>WorkingDirectory</key>
     <string>{{REPO_DIR}}</string>

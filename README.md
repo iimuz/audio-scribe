@@ -82,6 +82,8 @@ macOS では launchd により毎日決まった時刻に `run_audio_scribe_batc
    ```dotenv
    # 処理対象ディレクトリ (必須。実行時に読み込まれる)
    AUDIO_SCRIBE_TARGET_DIR=/path/to/recordings
+   # LLM agent (任意。既定は ollama。実行時に読み込まれるため変更に再インストールは不要)
+   AUDIO_SCRIBE_AGENT=claude
    # 実行時刻 (任意。既定は 03:00。変更後は再インストールが必要)
    AUDIO_SCRIBE_SCHEDULE_HOUR=3
    AUDIO_SCRIBE_SCHEDULE_MINUTE=0

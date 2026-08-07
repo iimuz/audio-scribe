@@ -53,6 +53,12 @@ setup() {
   [[ "$output" == *"AUDIO_SCRIBE_TARGET_DIR"* ]]
 }
 
+@test "render_plist: AUDIO_SCRIBE_AGENT の実行時展開を含む" {
+  run render_plist "/opt/homebrew/bin/mise" "/path/to/repo" "3" "0" "/path/to/log"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"}'* ]]
+}
+
 @test "render_plist: 未置換のプレースホルダが残る場合はエラー" {
   cp "$BATS_TEST_DIRNAME/../setup_launchd.sh" "$BATS_TEST_TMPDIR/"
   printf '<string>{{UNKNOWN}}</string>\n' >"$BATS_TEST_TMPDIR/com.iimuz.audio-scribe.plist.template"

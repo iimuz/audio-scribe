@@ -50,6 +50,8 @@ OPTIONS:
 ENV:
   AUDIO_SCRIBE_TARGET_DIR      Directory processed at runtime (read from .env
                                by mise exec on each scheduled run)
+  AUDIO_SCRIBE_AGENT           LLM agent: ollama or claude (read from .env by
+                               mise exec on each scheduled run; default: ollama)
   AUDIO_SCRIBE_SCHEDULE_HOUR   Hour of the daily run, 0-23 (default: 3;
                                embedded into the plist at install time)
   AUDIO_SCRIBE_SCHEDULE_MINUTE Minute of the daily run, 0-59 (default: 0;
