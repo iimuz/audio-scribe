@@ -92,42 +92,39 @@ function validate_schedule_value() {
   fi
 }
 
-# Escapes &, < and > for safe embedding in plist XML text nodes. The
-# replacement text embeds a literal "&", which under the patsub_replacement
-# shell option (on by default since bash 5.2) must be backslash-escaped or
-# bash treats it as "the text matched by pattern" (sed-style); older bash
-# (including macOS system /bin/bash 3.2) has no such option and never
-# treats "&" specially, so the escaped form there would leak a literal
-# backslash into the output instead of protecting it.
+# Escapes &, < and > for safe embedding in plist XML text nodes. A
+# per-character loop is used instead of ${value//&/&amp;} because bash 5.2 and
+# newer parse "&" in a substitution replacement as the matched text, so the
+# same source would produce different output depending on the bash version.
 function xml_escape() {
   local value="$1"
-  if shopt -q patsub_replacement 2>/dev/null; then
-    value="${value//&/\&amp;}"
-    value="${value//</\&lt;}"
-    value="${value//>/\&gt;}"
-  else
-    value="${value//&/&amp;}"
-    value="${value//</&lt;}"
-    value="${value//>/&gt;}"
-  fi
-  printf '%s' "$value"
+  local out="" ch i
+  for ((i = 0; i < ${#value}; i++)); do
+    ch="${value:i:1}"
+    case "$ch" in
+      '&') out="${out}&amp;" ;;
+      '<') out="${out}&lt;" ;;
+      '>') out="${out}&gt;" ;;
+      *) out="${out}${ch}" ;;
+    esac
+  done
+  printf '%s' "$out"
 }
 
-# Escapes a string for safe use as the replacement text of
-# ${content//pattern/replacement}: under patsub_replacement, bash treats an
-# unescaped "&" there as "the text matched by pattern" (sed-style), so a
-# literal "&" (e.g. from xml_escape's "&amp;") must be backslash-escaped,
-# and literal backslashes escaped in turn, or it gets
-# swallowed/misinterpreted during substitution. Older bash never treats "&"
-# specially and has no such option, so escaping there would corrupt the
-# output instead of protecting it.
-function bash_repl_escape() {
-  local value="$1"
-  if shopt -q patsub_replacement 2>/dev/null; then
-    value="${value//\\/\\\\}"
-    value="${value//&/\\&}"
-  fi
-  printf '%s' "$value"
+# Replaces every occurrence of <needle> in <haystack> with <replacement>.
+# ${haystack//needle/replacement} is avoided because bash 5.2 and newer parse
+# "&" in the replacement as the matched text, so a value containing "&" would
+# be corrupted there and kept intact on an older bash. Splitting on the needle
+# never parses the replacement.
+# replace_all <haystack> <needle> <replacement>
+function replace_all() {
+  local haystack="$1" needle="$2" replacement="$3"
+  local out=""
+  while [[ "$haystack" == *"$needle"* ]]; do
+    out="${out}${haystack%%"$needle"*}${replacement}"
+    haystack="${haystack#*"$needle"}"
+  done
+  printf '%s' "${out}${haystack}"
 }
 
 # Renders <template-file> to stdout, replacing each {{NAME}} with VALUE.
@@ -138,11 +135,8 @@ function render_template() {
   shift
   local content
   content=$(<"$template_file")
-  local name value
   while [[ $# -ge 2 ]]; do
-    name="$1"
-    value=$(bash_repl_escape "$2")
-    content="${content//\{\{${name}\}\}/${value}}"
+    content=$(replace_all "$content" "{{$1}}" "$2")
     shift 2
   done
   if [[ "$content" == *'{{'* ]]; then

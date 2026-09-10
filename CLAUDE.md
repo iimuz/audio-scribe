@@ -134,6 +134,11 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
 - 標準出力・標準エラーは `~/Library/Logs/audio-scribe.log` へ追記される。ジョブ状態は
   `launchctl print gui/$(id -u)/com.iimuz.audio-scribe` で確認できる。
 - launchd は同一ラベルのジョブ実行中は次回起動をスキップするためロック機構は持たない。
+- エスケープ (`xml_escape`) とテンプレート置換 (`replace_all`) は
+  `${value//pattern/replacement}` を使わない。bash 5.2 以降は置換文字列中の `&` を
+  「パターンに一致したテキスト」として解釈するため、同じソースが bash のバージョンで
+  異なる出力になる。`xml_escape` は 1 文字ずつの `case`、`replace_all` は needle での
+  分割と連結で実装し、どのバージョンでも同一の結果にする。
 - テスト (`tests/setup_launchd.bats`) は描画・検証の純粋関数 (`render_plist`、`render_wrapper`、
   `launcher_needs_build`、`validate_schedule_value`) のみを対象とし、
   cc / codesign / launchctl / plutil / mise には依存しない (CI は ubuntu のため)。
@@ -148,9 +153,13 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
 ## ツールとコマンド
 
 ツールバージョンは [mise.toml](mise.toml) で固定
-(bats, ffmpeg, node, pnpm, shellcheck, shfmt, taplo, uv, whisperx)。
+(bash, bats, ffmpeg, node, pnpm, shellcheck, shfmt, taplo, uv, whisperx)。
 `.env` が mise 経由で読み込まれる。`uv` は whisperx (pipx バックエンド) の
-インストールに使用する。lint / format の入口は mise タスクに統一している。
+インストールに使用する。`bash` (`conda:bash`) を固定しているのは、macOS のシステム
+`/bin/bash` (3.2) では `set -e` が `[[ ]]` の失敗で停止せず、bats が最終位置でない
+アサーションの失敗を無視して false green になるためである
+(非 ASCII のテスト名が `unknown test name` になるのも同じ 3.2 の問題)。
+シェルスクリプト自体は bash 3.2 でも動作する。lint / format の入口は mise タスクに統一している。
 
 - セットアップ: `mise run setup` (pnpm install と lefthook install)
 - クリーンアップ: `mise run clean` (node_modules の削除)
