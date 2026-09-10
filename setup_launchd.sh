@@ -19,6 +19,8 @@ readonly LOG_PATH="${HOME}/Library/Logs/audio-scribe.log"
 readonly WRAPPER_TEMPLATE_FILE="${SCRIPT_DIR}/launchd_wrapper.sh.template"
 # shellcheck disable=SC2034
 readonly LAUNCHER_SRC="${SCRIPT_DIR}/launcher.c"
+# TCC (Full Disk Access) binds to the launcher's code identity, so it lives
+# outside the repository and outside any package manager's reach.
 readonly LAUNCHER_DIR="${HOME}/Library/Application Support/audio-scribe/bin"
 readonly LAUNCHER_PATH="${LAUNCHER_DIR}/audio-scribe-launcher"
 # shellcheck disable=SC2034
