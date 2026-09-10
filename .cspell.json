@@ -19,6 +19,7 @@
     "lefthook",
     "meetdigest",
     "ollama",
+    "patsub",
     "pipefail",
     "plist",
     "plutil",

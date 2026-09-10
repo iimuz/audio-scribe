@@ -17,17 +17,13 @@ readonly LAUNCHD_LABEL="com.iimuz.audio-scribe"
 readonly TEMPLATE_FILE="${SCRIPT_DIR}/${LAUNCHD_LABEL}.plist.template"
 readonly PLIST_DEST="${HOME}/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
 readonly LOG_PATH="${HOME}/Library/Logs/audio-scribe.log"
-# shellcheck disable=SC2034
 readonly WRAPPER_TEMPLATE_FILE="${SCRIPT_DIR}/launchd_wrapper.sh.template"
-# shellcheck disable=SC2034
 readonly LAUNCHER_SRC="${SCRIPT_DIR}/launcher.c"
 # TCC (Full Disk Access) binds to the launcher's code identity, so it lives
 # outside the repository and outside any package manager's reach.
 readonly LAUNCHER_DIR="${HOME}/Library/Application Support/audio-scribe/bin"
 readonly LAUNCHER_PATH="${LAUNCHER_DIR}/audio-scribe-launcher"
-# shellcheck disable=SC2034
 readonly WRAPPER_PATH="${LAUNCHER_DIR}/run.sh"
-# shellcheck disable=SC2034
 readonly LAUNCHER_IDENTIFIER="${LAUNCHD_LABEL}.launcher"
 
 function log_info() {
@@ -96,24 +92,41 @@ function validate_schedule_value() {
   fi
 }
 
-# Escapes &, < and > for safe embedding in plist XML text nodes.
+# Escapes &, < and > for safe embedding in plist XML text nodes. The
+# replacement text embeds a literal "&", which under the patsub_replacement
+# shell option (on by default since bash 5.2) must be backslash-escaped or
+# bash treats it as "the text matched by pattern" (sed-style); older bash
+# (including macOS system /bin/bash 3.2) has no such option and never
+# treats "&" specially, so the escaped form there would leak a literal
+# backslash into the output instead of protecting it.
 function xml_escape() {
   local value="$1"
-  value="${value//&/\&amp;}"
-  value="${value//</\&lt;}"
-  value="${value//>/\&gt;}"
+  if shopt -q patsub_replacement 2>/dev/null; then
+    value="${value//&/\&amp;}"
+    value="${value//</\&lt;}"
+    value="${value//>/\&gt;}"
+  else
+    value="${value//&/&amp;}"
+    value="${value//</&lt;}"
+    value="${value//>/&gt;}"
+  fi
   printf '%s' "$value"
 }
 
 # Escapes a string for safe use as the replacement text of
-# ${content//pattern/replacement}: bash treats an unescaped "&" there as
-# "the text matched by pattern" (sed-style), so a literal "&" (e.g. from
-# xml_escape's "&amp;") must be backslash-escaped, and literal backslashes
-# escaped in turn, or it gets swallowed/misinterpreted during substitution.
+# ${content//pattern/replacement}: under patsub_replacement, bash treats an
+# unescaped "&" there as "the text matched by pattern" (sed-style), so a
+# literal "&" (e.g. from xml_escape's "&amp;") must be backslash-escaped,
+# and literal backslashes escaped in turn, or it gets
+# swallowed/misinterpreted during substitution. Older bash never treats "&"
+# specially and has no such option, so escaping there would corrupt the
+# output instead of protecting it.
 function bash_repl_escape() {
   local value="$1"
-  value="${value//\\/\\\\}"
-  value="${value//&/\\&}"
+  if shopt -q patsub_replacement 2>/dev/null; then
+    value="${value//\\/\\\\}"
+    value="${value//&/\\&}"
+  fi
   printf '%s' "$value"
 }
 
@@ -189,7 +202,11 @@ function build_launcher() {
     log_err "Failed to sign launcher"
     return 1
   fi
-  mv "$tmp" "$launcher_path"
+  if ! mv "$tmp" "$launcher_path"; then
+    rm -f "$tmp"
+    log_err "Failed to install launcher binary"
+    return 1
+  fi
   log_err "WARNING: launcher was (re)built; grant Full Disk Access to it again: ${launcher_path}"
 }
 

@@ -144,6 +144,9 @@ launchd の起点は専用のランチャーバイナリ
 - ランチャーを再ビルドすると code identity が変わり Full Disk Access が失効します。
   `launcher.c` を変更した場合はランチャーを削除してから install し直し、Full Disk Access を
   再付与してください (System Settings の一覧に古い項目が残っていれば削除して再追加する)。
+- 既にこの機能を旧方式 (mise 直接起動) でインストール済みの場合は、`mise run launchd:install`
+  を再実行してランチャー方式へ移行してください。移行後はランチャーへの Full Disk Access 付与が
+  必要です (旧来 `mise` に付与していた許可は、必要であれば System Settings から削除しても構いません)。
 
 ## Development
 
