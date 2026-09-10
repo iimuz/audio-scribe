@@ -3,7 +3,7 @@
 # Recursively finds .mov files under a given directory and processes each
 # one sequentially by calling the sibling run_audio_scribe.sh.
 #
-# Required tools: bash, find, sort
+# Required tools: bash, find, sort, mktemp
 # Required sibling: run_audio_scribe.sh (must be in the same directory)
 
 SCRIPT_NAME=$(basename "${0}")
@@ -53,6 +53,19 @@ EXAMPLES:
   ${SCRIPT_NAME} --verbose ./meetings
   ${SCRIPT_NAME} --agent claude --summarize-model haiku ./meetings
 EOF
+}
+
+# Writes NUL-delimited, deterministically sorted .mov paths under $1 into file $2.
+# pipefail is set in a subshell so that a find failure (e.g. EPERM on a subdirectory)
+# is not masked by sort exiting 0, regardless of the caller's shell options.
+function collect_mov_files() {
+  local dir="$1"
+  local out_file="$2"
+
+  (
+    set -o pipefail
+    find "$dir" -type f -iname '*.mov' -print0 | sort -z
+  ) >"$out_file"
 }
 
 # Parses CLI arguments. Sets readonly globals:
@@ -148,11 +161,19 @@ function main() {
     set -x
   fi
 
-  # Collect .mov files (NUL-delimited, sorted deterministically)
+  local list_file
+  list_file=$(mktemp)
+  if ! collect_mov_files "$TARGET_DIR" "$list_file"; then
+    rm -f "$list_file"
+    log_err "Failed to scan directory: ${TARGET_DIR}"
+    exit 1
+  fi
+
   local files=()
   while IFS= read -r -d '' file; do
     files+=("$file")
-  done < <(find "$TARGET_DIR" -type f -iname '*.mov' -print0 | sort -z)
+  done <"$list_file"
+  rm -f "$list_file"
 
   local total="${#files[@]}"
 

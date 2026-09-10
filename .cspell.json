@@ -29,6 +29,7 @@
     "renovatebot",
     "setext",
     "stdin",
+    "subshell",
     "taplo",
     "whisperx",
     "worktree"
