@@ -4,17 +4,6 @@ setup() {
   source "$BATS_TEST_DIRNAME/../setup_launchd.sh"
 }
 
-@test "require_modern_bash: patsub_replacement が使えれば成功" {
-  run require_modern_bash
-  [ "$status" -eq 0 ]
-}
-
-@test "require_modern_bash: patsub_replacement が使えなければエラー" {
-  run bash -c "shopt -u patsub_replacement; source '$BATS_TEST_DIRNAME/../setup_launchd.sh'; require_modern_bash"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"bash 5.2"* ]]
-}
-
 @test "validate_schedule_value: 範囲内の整数を受け付ける" {
   run validate_schedule_value "AUDIO_SCRIBE_SCHEDULE_HOUR" "3" 23
   [ "$status" -eq 0 ]

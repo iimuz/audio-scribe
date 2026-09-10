@@ -3,7 +3,7 @@
 # run_audio_scribe_batch.sh on a daily schedule via a dedicated launcher
 # binary and mise.
 #
-# Required tools: bash 5.2+, launchctl, codesign, cc (Command Line Tools), mise
+# Required tools: bash, launchctl, codesign, cc (Command Line Tools), mise
 # Required siblings: com.iimuz.audio-scribe.plist.template,
 #                    launchd_wrapper.sh.template, launcher.c
 
@@ -39,17 +39,6 @@ function log_err() {
 function err() {
   log_err "Line $1: $2"
   exit 1
-}
-
-# The XML and replacement-text escaping below relies on bash treating "&" in
-# a substitution replacement as the matched text, which arrived with bash 5.2.
-# On an older bash (macOS system /bin/bash is 3.2) the escaping would silently
-# leak literal backslashes into the rendered plist, so refuse to run.
-function require_modern_bash() {
-  if ! shopt -q patsub_replacement 2>/dev/null; then
-    log_err "bash 5.2 or newer is required (current: ${BASH_VERSION}); run via mise, e.g. mise run launchd:install"
-    return 1
-  fi
 }
 
 function usage() {
@@ -103,26 +92,39 @@ function validate_schedule_value() {
   fi
 }
 
-# Escapes &, < and > for safe embedding in plist XML text nodes. The literal
-# "&" in the replacement text is backslash-escaped because bash treats an
-# unescaped "&" there as the text matched by the pattern.
+# Escapes &, < and > for safe embedding in plist XML text nodes. A
+# per-character loop is used instead of ${value//&/&amp;} because bash 5.2 and
+# newer parse "&" in a substitution replacement as the matched text, so the
+# same source would produce different output depending on the bash version.
 function xml_escape() {
   local value="$1"
-  value="${value//&/\&amp;}"
-  value="${value//</\&lt;}"
-  value="${value//>/\&gt;}"
-  printf '%s' "$value"
+  local out="" ch i
+  for ((i = 0; i < ${#value}; i++)); do
+    ch="${value:i:1}"
+    case "$ch" in
+      '&') out="${out}&amp;" ;;
+      '<') out="${out}&lt;" ;;
+      '>') out="${out}&gt;" ;;
+      *) out="${out}${ch}" ;;
+    esac
+  done
+  printf '%s' "$out"
 }
 
-# Escapes a string for safe use as the replacement text of
-# ${content//pattern/replacement}: bash treats an unescaped "&" there as the
-# text matched by the pattern, so a literal "&" (e.g. from xml_escape's
-# "&amp;") must be backslash-escaped, and literal backslashes escaped in turn.
-function bash_repl_escape() {
-  local value="$1"
-  value="${value//\\/\\\\}"
-  value="${value//&/\\&}"
-  printf '%s' "$value"
+# Replaces every occurrence of <needle> in <haystack> with <replacement>.
+# ${haystack//needle/replacement} is avoided because bash 5.2 and newer parse
+# "&" in the replacement as the matched text, so a value containing "&" would
+# be corrupted there and kept intact on an older bash. Splitting on the needle
+# never parses the replacement.
+# replace_all <haystack> <needle> <replacement>
+function replace_all() {
+  local haystack="$1" needle="$2" replacement="$3"
+  local out=""
+  while [[ "$haystack" == *"$needle"* ]]; do
+    out="${out}${haystack%%"$needle"*}${replacement}"
+    haystack="${haystack#*"$needle"}"
+  done
+  printf '%s' "${out}${haystack}"
 }
 
 # Renders <template-file> to stdout, replacing each {{NAME}} with VALUE.
@@ -133,11 +135,8 @@ function render_template() {
   shift
   local content
   content=$(<"$template_file")
-  local name value
   while [[ $# -ge 2 ]]; do
-    name="$1"
-    value=$(bash_repl_escape "$2")
-    content="${content//\{\{${name}\}\}/${value}}"
+    content=$(replace_all "$content" "{{$1}}" "$2")
     shift 2
   done
   if [[ "$content" == *'{{'* ]]; then
@@ -330,7 +329,6 @@ function cmd_uninstall() {
 }
 
 function main() {
-  require_modern_bash || exit 1
   parse_args "$@"
 
   if [[ "$VERBOSE" -eq 1 ]]; then
