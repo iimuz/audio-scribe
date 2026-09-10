@@ -141,6 +141,13 @@ function render_plist() {
     LOG_PATH "$(xml_escape "$4")"
 }
 
+# render_wrapper <mise-bin> <repo-dir>
+function render_wrapper() {
+  render_template "$WRAPPER_TEMPLATE_FILE" \
+    MISE_BIN "$(printf '%q' "$1")" \
+    REPO_DIR "$(printf '%q' "$2")"
+}
+
 # Parses CLI arguments. Sets readonly globals: COMMAND, VERBOSE
 function parse_args() {
   local verbose=0

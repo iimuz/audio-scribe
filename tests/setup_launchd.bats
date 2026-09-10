@@ -73,3 +73,34 @@ setup() {
   [[ "$output" == *"<string>/path/to/log &amp; &lt;test&gt;</string>"* ]]
   [[ "$output" != *"{{"* ]]
 }
+
+@test "render_wrapper: cd と mise exec を含み batch スクリプトを起動する" {
+  run render_wrapper "/opt/homebrew/bin/mise" "/path/to/repo"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"#!/bin/bash"* ]]
+  [[ "$output" == *"cd /path/to/repo"* ]]
+  [[ "$output" == *"exec /opt/homebrew/bin/mise exec -- bash -c"* ]]
+  [[ "$output" == *"run_audio_scribe_batch.sh"* ]]
+  [[ "$output" == *"AUDIO_SCRIBE_TARGET_DIR"* ]]
+  [[ "$output" != *"{{"* ]]
+}
+
+@test "render_wrapper: AUDIO_SCRIBE_AGENT の実行時展開を含む" {
+  run render_wrapper "/opt/homebrew/bin/mise" "/path/to/repo"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"}'* ]]
+}
+
+@test "render_wrapper: 空白や & を含むパスをシェル引用する" {
+  run render_wrapper "/opt/home brew/mise" "/path/to/repo & test"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'cd /path/to/repo\ \&\ test'* ]]
+  [[ "$output" == *'exec /opt/home\ brew/mise exec'* ]]
+}
+
+@test "render_wrapper: 未置換のプレースホルダが残る場合はエラー" {
+  cp "$BATS_TEST_DIRNAME/../setup_launchd.sh" "$BATS_TEST_TMPDIR/"
+  printf 'cd {{UNKNOWN}}\n' >"$BATS_TEST_TMPDIR/launchd_wrapper.sh.template"
+  run bash -c "source '$BATS_TEST_TMPDIR/setup_launchd.sh'; render_wrapper a b"
+  [ "$status" -ne 0 ]
+}

@@ -1,0 +1,8 @@
+#!/bin/bash
+# Rendered by setup_launchd.sh on every install; do not edit by hand.
+# Only the launchd launcher binary (which holds the Full Disk Access grant)
+# runs this file. cd and the mise path live here rather than in the launcher
+# so that moving the repository or mise never requires rebuilding the launcher.
+set -eu
+cd {{REPO_DIR}}
+exec {{MISE_BIN}} exec -- bash -c 'exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${AUDIO_SCRIBE_TARGET_DIR:?AUDIO_SCRIBE_TARGET_DIR is not set}"'
