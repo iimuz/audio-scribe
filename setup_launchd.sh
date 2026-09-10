@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Installs or uninstalls the launchd agent that runs
-# run_audio_scribe_batch.sh on a daily schedule via mise.
+# run_audio_scribe_batch.sh on a daily schedule via a dedicated launcher
+# binary and mise.
 #
-# Required tools: bash, launchctl (macOS), mise
-# Required sibling: com.iimuz.audio-scribe.plist.template
+# Required tools: bash, launchctl, codesign, cc (Command Line Tools), mise
+# Required siblings: com.iimuz.audio-scribe.plist.template,
+#                    launchd_wrapper.sh.template, launcher.c
 
 SCRIPT_NAME=$(basename "${0}")
 readonly SCRIPT_NAME
@@ -51,9 +53,14 @@ Installs or uninstalls the launchd agent (${LAUNCHD_LABEL}) that runs
 run_audio_scribe_batch.sh on a daily schedule.
 
 COMMANDS:
-  install    Render the plist template, place it under ~/Library/LaunchAgents,
-             and load it via launchctl bootstrap (idempotent).
+  install    Render the wrapper script and plist, build and ad-hoc sign the
+             launcher binary if missing or stale, place the plist under
+             ~/Library/LaunchAgents, and load it via launchctl bootstrap
+             (idempotent). The launcher must be granted Full Disk Access
+             once, by hand, in System Settings.
   uninstall  Unload the agent via launchctl bootout and remove the plist.
+             The launcher and wrapper are kept so the Full Disk Access grant
+             survives a reinstall.
 
 OPTIONS:
   -h, --help     Show this help message
@@ -236,8 +243,17 @@ function parse_args() {
 }
 
 function cmd_install() {
-  if [[ ! -r "$TEMPLATE_FILE" ]]; then
-    log_err "Template not found or not readable: ${TEMPLATE_FILE}"
+  local required
+  for required in "$TEMPLATE_FILE" "$WRAPPER_TEMPLATE_FILE" "$LAUNCHER_SRC"; do
+    if [[ ! -r "$required" ]]; then
+      log_err "Required file not found or not readable: ${required}"
+      exit 1
+    fi
+  done
+
+  local mise_bin
+  if ! mise_bin=$(command -v mise); then
+    log_err "mise not found in PATH"
     exit 1
   fi
 
@@ -250,8 +266,23 @@ function cmd_install() {
     log_err "WARNING: AUDIO_SCRIBE_TARGET_DIR is not set. Set it in .env before the first scheduled run."
   fi
 
-  mkdir -p "$(dirname "$PLIST_DEST")" "$(dirname "$LOG_PATH")"
+  mkdir -p "$(dirname "$PLIST_DEST")" "$(dirname "$LOG_PATH")" "$LAUNCHER_DIR"
   : >>"$LOG_PATH"
+
+  local tmp_wrapper="${WRAPPER_PATH}.tmp.$$"
+  if ! render_wrapper "$mise_bin" "$SCRIPT_DIR" >"$tmp_wrapper"; then
+    rm -f "$tmp_wrapper"
+    log_err "Failed to render wrapper script"
+    exit 1
+  fi
+  chmod 755 "$tmp_wrapper"
+  mv "$tmp_wrapper" "$WRAPPER_PATH"
+
+  if launcher_needs_build "$LAUNCHER_PATH" "$WRAPPER_PATH"; then
+    build_launcher "$LAUNCHER_PATH" "$WRAPPER_PATH" || exit 1
+  else
+    log_info "Launcher up to date: ${LAUNCHER_PATH}"
+  fi
 
   local rendered
   rendered=$(render_plist "$LAUNCHER_PATH" "$hour" "$minute" "$LOG_PATH")
@@ -274,12 +305,16 @@ function cmd_install() {
   log_info "Installed launchd agent: ${LAUNCHD_LABEL}"
   log_info "Schedule: daily at $(printf '%02d' "$((10#$hour))"):$(printf '%02d' "$((10#$minute))")"
   log_info "Log file: ${LOG_PATH}"
+  log_info "Launcher: ${LAUNCHER_PATH}"
+  log_info "First install or rebuilt launcher: add the launcher to System Settings > Privacy & Security > Full Disk Access (press Cmd+Shift+G in the file dialog and enter: ${LAUNCHER_DIR})"
+  log_info "Then verify with: launchctl kickstart -k gui/$(id -u)/${LAUNCHD_LABEL} && mise run launchd:logs"
 }
 
 function cmd_uninstall() {
   launchctl bootout "gui/$(id -u)/${LAUNCHD_LABEL}" 2>/dev/null || true
   rm -f "$PLIST_DEST"
   log_info "Uninstalled launchd agent: ${LAUNCHD_LABEL}"
+  log_info "Launcher and wrapper are kept so the Full Disk Access grant survives a reinstall. Remove by hand if no longer needed: ${LAUNCHER_DIR}"
 }
 
 function main() {
