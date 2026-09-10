@@ -3,7 +3,7 @@
 # run_audio_scribe_batch.sh on a daily schedule via a dedicated launcher
 # binary and mise.
 #
-# Required tools: bash, launchctl, codesign, cc (Command Line Tools), mise
+# Required tools: bash 5.2+, launchctl, codesign, cc (Command Line Tools), mise
 # Required siblings: com.iimuz.audio-scribe.plist.template,
 #                    launchd_wrapper.sh.template, launcher.c
 
@@ -39,6 +39,17 @@ function log_err() {
 function err() {
   log_err "Line $1: $2"
   exit 1
+}
+
+# The XML and replacement-text escaping below relies on bash treating "&" in
+# a substitution replacement as the matched text, which arrived with bash 5.2.
+# On an older bash (macOS system /bin/bash is 3.2) the escaping would silently
+# leak literal backslashes into the rendered plist, so refuse to run.
+function require_modern_bash() {
+  if ! shopt -q patsub_replacement 2>/dev/null; then
+    log_err "bash 5.2 or newer is required (current: ${BASH_VERSION}); run via mise, e.g. mise run launchd:install"
+    return 1
+  fi
 }
 
 function usage() {
@@ -92,41 +103,25 @@ function validate_schedule_value() {
   fi
 }
 
-# Escapes &, < and > for safe embedding in plist XML text nodes. The
-# replacement text embeds a literal "&", which under the patsub_replacement
-# shell option (on by default since bash 5.2) must be backslash-escaped or
-# bash treats it as "the text matched by pattern" (sed-style); older bash
-# (including macOS system /bin/bash 3.2) has no such option and never
-# treats "&" specially, so the escaped form there would leak a literal
-# backslash into the output instead of protecting it.
+# Escapes &, < and > for safe embedding in plist XML text nodes. The literal
+# "&" in the replacement text is backslash-escaped because bash treats an
+# unescaped "&" there as the text matched by the pattern.
 function xml_escape() {
   local value="$1"
-  if shopt -q patsub_replacement 2>/dev/null; then
-    value="${value//&/\&amp;}"
-    value="${value//</\&lt;}"
-    value="${value//>/\&gt;}"
-  else
-    value="${value//&/&amp;}"
-    value="${value//</&lt;}"
-    value="${value//>/&gt;}"
-  fi
+  value="${value//&/\&amp;}"
+  value="${value//</\&lt;}"
+  value="${value//>/\&gt;}"
   printf '%s' "$value"
 }
 
 # Escapes a string for safe use as the replacement text of
-# ${content//pattern/replacement}: under patsub_replacement, bash treats an
-# unescaped "&" there as "the text matched by pattern" (sed-style), so a
-# literal "&" (e.g. from xml_escape's "&amp;") must be backslash-escaped,
-# and literal backslashes escaped in turn, or it gets
-# swallowed/misinterpreted during substitution. Older bash never treats "&"
-# specially and has no such option, so escaping there would corrupt the
-# output instead of protecting it.
+# ${content//pattern/replacement}: bash treats an unescaped "&" there as the
+# text matched by the pattern, so a literal "&" (e.g. from xml_escape's
+# "&amp;") must be backslash-escaped, and literal backslashes escaped in turn.
 function bash_repl_escape() {
   local value="$1"
-  if shopt -q patsub_replacement 2>/dev/null; then
-    value="${value//\\/\\\\}"
-    value="${value//&/\\&}"
-  fi
+  value="${value//\\/\\\\}"
+  value="${value//&/\\&}"
   printf '%s' "$value"
 }
 
@@ -335,6 +330,7 @@ function cmd_uninstall() {
 }
 
 function main() {
+  require_modern_bash || exit 1
   parse_args "$@"
 
   if [[ "$VERBOSE" -eq 1 ]]; then

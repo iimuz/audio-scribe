@@ -4,6 +4,17 @@ setup() {
   source "$BATS_TEST_DIRNAME/../setup_launchd.sh"
 }
 
+@test "require_modern_bash: patsub_replacement が使えれば成功" {
+  run require_modern_bash
+  [ "$status" -eq 0 ]
+}
+
+@test "require_modern_bash: patsub_replacement が使えなければエラー" {
+  run bash -c "shopt -u patsub_replacement; source '$BATS_TEST_DIRNAME/../setup_launchd.sh'; require_modern_bash"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"bash 5.2"* ]]
+}
+
 @test "validate_schedule_value: 範囲内の整数を受け付ける" {
   run validate_schedule_value "AUDIO_SCRIBE_SCHEDULE_HOUR" "3" 23
   [ "$status" -eq 0 ]
@@ -74,13 +85,6 @@ setup() {
   [[ "$output" != *"{{"* ]]
 }
 
-@test "render_plist: patsub_replacement が無効でも XML エスケープが壊れない (bash 3.2 相当)" {
-  run bash -c "shopt -u patsub_replacement 2>/dev/null; source '$BATS_TEST_DIRNAME/../setup_launchd.sh'; render_plist '/path/to/launcher & <test>' 3 0 '/path/to/log'"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'<string>/path/to/launcher &amp; &lt;test&gt;</string>'* ]]
-  [[ "$output" != *'\&amp;'* ]]
-}
-
 @test "render_wrapper: cd と mise exec を含み batch スクリプトを起動する" {
   run render_wrapper "/opt/homebrew/bin/mise" "/path/to/repo"
   [ "$status" -eq 0 ]
@@ -103,12 +107,6 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *'cd /path/to/repo\ \&\ test'* ]]
   [[ "$output" == *'exec /opt/home\ brew/mise exec'* ]]
-}
-
-@test "render_wrapper: patsub_replacement が無効でも出力が壊れない (bash 3.2 相当)" {
-  run bash -c "shopt -u patsub_replacement 2>/dev/null; source '$BATS_TEST_DIRNAME/../setup_launchd.sh'; render_wrapper '/opt/home brew/mise' '/path/to/repo & test'"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'cd /path/to/repo\ \&\ test'* ]]
 }
 
 @test "render_wrapper: 未置換のプレースホルダが残る場合はエラー" {

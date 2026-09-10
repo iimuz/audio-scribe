@@ -136,6 +136,9 @@ launchd の起点は専用のランチャーバイナリ
 
 補足:
 
+- `setup_launchd.sh` は bash 5.2 以降でのみ動作します (それ未満では plist の生成が壊れるため
+  起動時にエラーで停止します)。bash は mise が導入するため、`mise run launchd:install` /
+  `mise run launchd:uninstall` から実行してください。
 - 同一ジョブの実行中はスケジュール時刻が来ても多重起動されません。
 - 処理済み (summary あり) のファイルはスキップされるため再実行は冪等です。
 - `AUDIO_SCRIBE_TARGET_DIR` と `AUDIO_SCRIBE_AGENT` の変更は次回実行から反映されます (再インストール不要です)。
