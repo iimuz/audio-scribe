@@ -156,8 +156,10 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
 (bash, bats, ffmpeg, node, pnpm, shellcheck, shfmt, taplo, uv, whisperx)。
 `.env` が mise 経由で読み込まれる。`uv` は whisperx (pipx バックエンド) の
 インストールに使用する。`bash` (`conda:bash`) を固定しているのは、macOS のシステム
-`/bin/bash` が 3.2 のままで bats が日本語のテスト名を扱えないためである
-(シェルスクリプト自体は bash 3.2 でも動作する)。lint / format の入口は mise タスクに統一している。
+`/bin/bash` (3.2) では `set -e` が `[[ ]]` の失敗で停止せず、bats が最終位置でない
+アサーションの失敗を無視して false green になるためである
+(非 ASCII のテスト名が `unknown test name` になるのも同じ 3.2 の問題)。
+シェルスクリプト自体は bash 3.2 でも動作する。lint / format の入口は mise タスクに統一している。
 
 - セットアップ: `mise run setup` (pnpm install と lefthook install)
 - クリーンアップ: `mise run clean` (node_modules の削除)
