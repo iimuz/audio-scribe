@@ -148,6 +148,44 @@ function render_wrapper() {
     REPO_DIR "$(printf '%q' "$2")"
 }
 
+# Returns 0 when the launcher must be (re)built: it is missing, or the
+# embedded wrapper path differs from <wrapper-path>. Source mtime is
+# deliberately ignored: a rebuild changes the code identity and revokes the
+# Full Disk Access grant, so it must only happen when unavoidable.
+# launcher_needs_build <launcher-path> <wrapper-path>
+function launcher_needs_build() {
+  local launcher_path="$1" wrapper_path="$2"
+  [[ -x "$launcher_path" ]] || return 0
+  if grep -aqF -- "$wrapper_path" "$launcher_path"; then
+    return 1
+  fi
+  return 0
+}
+
+# Compiles launcher.c with <wrapper-path> baked in and ad-hoc signs it.
+# build_launcher <launcher-path> <wrapper-path>
+function build_launcher() {
+  local launcher_path="$1" wrapper_path="$2"
+  if ! xcode-select -p >/dev/null 2>&1; then
+    log_err "Command Line Tools not found. Install with: xcode-select --install"
+    return 1
+  fi
+  local tmp="${launcher_path}.tmp.$$"
+  log_info "Building launcher: ${launcher_path}"
+  if ! /usr/bin/cc -O2 -DSCRIPT_PATH="\"${wrapper_path}\"" -o "$tmp" "$LAUNCHER_SRC"; then
+    rm -f "$tmp"
+    log_err "Failed to compile launcher"
+    return 1
+  fi
+  if ! codesign --force --sign - --identifier "$LAUNCHER_IDENTIFIER" "$tmp"; then
+    rm -f "$tmp"
+    log_err "Failed to sign launcher"
+    return 1
+  fi
+  mv "$tmp" "$launcher_path"
+  log_err "WARNING: launcher was (re)built; grant Full Disk Access to it again: ${launcher_path}"
+}
+
 # Parses CLI arguments. Sets readonly globals: COMMAND, VERBOSE
 function parse_args() {
   local verbose=0

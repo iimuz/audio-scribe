@@ -104,3 +104,29 @@ setup() {
   run bash -c "source '$BATS_TEST_TMPDIR/setup_launchd.sh'; render_wrapper a b"
   [ "$status" -ne 0 ]
 }
+
+@test "launcher_needs_build: ランチャーが無ければ真" {
+  run launcher_needs_build "$BATS_TEST_TMPDIR/missing" "/path/to/run.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "launcher_needs_build: 実行権限が無ければ真" {
+  printf 'x\0/path/to/run.sh\0' >"$BATS_TEST_TMPDIR/launcher"
+  chmod 644 "$BATS_TEST_TMPDIR/launcher"
+  run launcher_needs_build "$BATS_TEST_TMPDIR/launcher" "/path/to/run.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "launcher_needs_build: 埋め込みパスが一致すれば偽" {
+  printf 'x\0/path/to/run.sh\0' >"$BATS_TEST_TMPDIR/launcher"
+  chmod 755 "$BATS_TEST_TMPDIR/launcher"
+  run launcher_needs_build "$BATS_TEST_TMPDIR/launcher" "/path/to/run.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "launcher_needs_build: 埋め込みパスが異なれば真" {
+  printf 'x\0/path/to/run.sh\0' >"$BATS_TEST_TMPDIR/launcher"
+  chmod 755 "$BATS_TEST_TMPDIR/launcher"
+  run launcher_needs_build "$BATS_TEST_TMPDIR/launcher" "/other/run.sh"
+  [ "$status" -eq 0 ]
+}
