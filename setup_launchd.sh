@@ -15,6 +15,16 @@ readonly LAUNCHD_LABEL="com.iimuz.audio-scribe"
 readonly TEMPLATE_FILE="${SCRIPT_DIR}/${LAUNCHD_LABEL}.plist.template"
 readonly PLIST_DEST="${HOME}/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
 readonly LOG_PATH="${HOME}/Library/Logs/audio-scribe.log"
+# shellcheck disable=SC2034
+readonly WRAPPER_TEMPLATE_FILE="${SCRIPT_DIR}/launchd_wrapper.sh.template"
+# shellcheck disable=SC2034
+readonly LAUNCHER_SRC="${SCRIPT_DIR}/launcher.c"
+readonly LAUNCHER_DIR="${HOME}/Library/Application Support/audio-scribe/bin"
+readonly LAUNCHER_PATH="${LAUNCHER_DIR}/audio-scribe-launcher"
+# shellcheck disable=SC2034
+readonly WRAPPER_PATH="${LAUNCHER_DIR}/run.sh"
+# shellcheck disable=SC2034
+readonly LAUNCHER_IDENTIFIER="${LAUNCHD_LABEL}.launcher"
 
 function log_info() {
   local message="$1"
@@ -98,27 +108,35 @@ function bash_repl_escape() {
   printf '%s' "$value"
 }
 
-# Renders TEMPLATE_FILE to stdout, replacing {{...}} placeholders.
-# render_plist <mise-bin> <repo-dir> <hour> <minute> <log-path>
-function render_plist() {
-  local mise_bin repo_dir hour minute log_path
-  mise_bin=$(bash_repl_escape "$(xml_escape "$1")")
-  repo_dir=$(bash_repl_escape "$(xml_escape "$2")")
-  hour=$(bash_repl_escape "$(xml_escape "$3")")
-  minute=$(bash_repl_escape "$(xml_escape "$4")")
-  log_path=$(bash_repl_escape "$(xml_escape "$5")")
+# Renders <template-file> to stdout, replacing each {{NAME}} with VALUE.
+# Values must already be escaped for the target format by the caller.
+# render_template <template-file> [NAME VALUE]...
+function render_template() {
+  local template_file="$1"
+  shift
   local content
-  content=$(<"$TEMPLATE_FILE")
-  content="${content//\{\{MISE_BIN\}\}/${mise_bin}}"
-  content="${content//\{\{REPO_DIR\}\}/${repo_dir}}"
-  content="${content//\{\{SCHEDULE_HOUR\}\}/${hour}}"
-  content="${content//\{\{SCHEDULE_MINUTE\}\}/${minute}}"
-  content="${content//\{\{LOG_PATH\}\}/${log_path}}"
+  content=$(<"$template_file")
+  local name value
+  while [[ $# -ge 2 ]]; do
+    name="$1"
+    value=$(bash_repl_escape "$2")
+    content="${content//\{\{${name}\}\}/${value}}"
+    shift 2
+  done
   if [[ "$content" == *'{{'* ]]; then
-    log_err "Unreplaced placeholder remains in rendered plist"
+    log_err "Unreplaced placeholder remains in rendered ${template_file##*/}"
     return 1
   fi
   printf '%s\n' "$content"
+}
+
+# render_plist <launcher-path> <hour> <minute> <log-path>
+function render_plist() {
+  render_template "$TEMPLATE_FILE" \
+    LAUNCHER_PATH "$(xml_escape "$1")" \
+    SCHEDULE_HOUR "$(xml_escape "$2")" \
+    SCHEDULE_MINUTE "$(xml_escape "$3")" \
+    LOG_PATH "$(xml_escape "$4")"
 }
 
 # Parses CLI arguments. Sets readonly globals: COMMAND, VERBOSE
@@ -176,12 +194,6 @@ function cmd_install() {
     exit 1
   fi
 
-  local mise_bin
-  if ! mise_bin=$(command -v mise); then
-    log_err "mise not found in PATH"
-    exit 1
-  fi
-
   local hour="${AUDIO_SCRIBE_SCHEDULE_HOUR:-3}"
   local minute="${AUDIO_SCRIBE_SCHEDULE_MINUTE:-0}"
   validate_schedule_value "AUDIO_SCRIBE_SCHEDULE_HOUR" "$hour" 23 || exit 1
@@ -195,7 +207,7 @@ function cmd_install() {
   : >>"$LOG_PATH"
 
   local rendered
-  rendered=$(render_plist "$mise_bin" "$SCRIPT_DIR" "$hour" "$minute" "$LOG_PATH")
+  rendered=$(render_plist "$LAUNCHER_PATH" "$hour" "$minute" "$LOG_PATH")
 
   local tmp_plist="${PLIST_DEST}.tmp.$$"
   printf '%s\n' "$rendered" >"$tmp_plist"

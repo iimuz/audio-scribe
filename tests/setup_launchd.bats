@@ -35,41 +35,41 @@ setup() {
 }
 
 @test "render_plist: プレースホルダをすべて置換する" {
-  run render_plist "/opt/homebrew/bin/mise" "/path/to/repo" "3" "0" "/path/to/log"
+  run render_plist "/Users/me/Library/Application Support/audio-scribe/bin/audio-scribe-launcher" "3" "0" "/path/to/log"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"<string>/opt/homebrew/bin/mise</string>"* ]]
-  [[ "$output" == *"<string>/path/to/repo</string>"* ]]
+  [[ "$output" == *"<string>/Users/me/Library/Application Support/audio-scribe/bin/audio-scribe-launcher</string>"* ]]
   [[ "$output" == *"<integer>3</integer>"* ]]
   [[ "$output" == *"<integer>0</integer>"* ]]
   [[ "$output" == *"<string>/path/to/log</string>"* ]]
   [[ "$output" != *"{{"* ]]
 }
 
-@test "render_plist: ラベルと batch スクリプト呼び出しを含む" {
-  run render_plist "/opt/homebrew/bin/mise" "/path/to/repo" "3" "0" "/path/to/log"
+@test "render_plist: ProgramArguments はランチャー 1 個のみで mise や bash -c を含まない" {
+  run render_plist "/path/to/launcher" "3" "0" "/path/to/log"
   [ "$status" -eq 0 ]
   [[ "$output" == *"<string>com.iimuz.audio-scribe</string>"* ]]
-  [[ "$output" == *"run_audio_scribe_batch.sh"* ]]
-  [[ "$output" == *"AUDIO_SCRIBE_TARGET_DIR"* ]]
+  [[ "$output" != *"mise"* ]]
+  [[ "$output" != *"bash"* ]]
+  [[ "$output" != *"run_audio_scribe_batch.sh"* ]]
 }
 
-@test "render_plist: AUDIO_SCRIBE_AGENT の実行時展開を含む" {
-  run render_plist "/opt/homebrew/bin/mise" "/path/to/repo" "3" "0" "/path/to/log"
+@test "render_plist: WorkingDirectory を含まない" {
+  run render_plist "/path/to/launcher" "3" "0" "/path/to/log"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"}'* ]]
+  [[ "$output" != *"WorkingDirectory"* ]]
 }
 
 @test "render_plist: 未置換のプレースホルダが残る場合はエラー" {
   cp "$BATS_TEST_DIRNAME/../setup_launchd.sh" "$BATS_TEST_TMPDIR/"
   printf '<string>{{UNKNOWN}}</string>\n' >"$BATS_TEST_TMPDIR/com.iimuz.audio-scribe.plist.template"
-  run bash -c "source '$BATS_TEST_TMPDIR/setup_launchd.sh'; render_plist a b 3 0 c"
+  run bash -c "source '$BATS_TEST_TMPDIR/setup_launchd.sh'; render_plist a 3 0 c"
   [ "$status" -ne 0 ]
 }
 
-@test "render_plist: リポジトリパスの & < > を XML エスケープする" {
-  run render_plist "/opt/homebrew/bin/mise" "/path/to/repo & <test>" "3" "0" "/path/to/log & <test>"
+@test "render_plist: パスの & < > を XML エスケープする" {
+  run render_plist "/path/to/launcher & <test>" "3" "0" "/path/to/log & <test>"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"<string>/path/to/repo &amp; &lt;test&gt;</string>"* ]]
+  [[ "$output" == *"<string>/path/to/launcher &amp; &lt;test&gt;</string>"* ]]
   [[ "$output" == *"<string>/path/to/log &amp; &lt;test&gt;</string>"* ]]
   [[ "$output" != *"{{"* ]]
 }
