@@ -76,6 +76,10 @@ HF_TOKEN=hf_xxxxxxxxxxxxxxxx
 ### Periodic Execution (launchd)
 
 macOS では launchd により毎日決まった時刻に `run_audio_scribe_batch.sh` を自動実行できます。
+launchd の起点は専用のランチャーバイナリ
+(`~/Library/Application Support/audio-scribe/bin/audio-scribe-launcher`) で、
+このバイナリに一度だけ Full Disk Access を付与します。mise やその配下のツールが更新されても
+許可は失効しません。
 
 1. `.env` に設定を記載する:
 
@@ -89,17 +93,39 @@ macOS では launchd により毎日決まった時刻に `run_audio_scribe_batc
    AUDIO_SCRIBE_SCHEDULE_MINUTE=0
    ```
 
-2. インストール (再実行すると設定を更新できる):
+2. インストール (再実行すると設定を更新できる)。ランチャーが無いか埋め込みパスが古い場合だけ
+   `cc` でビルドして adhoc 署名する (Command Line Tools が必要):
 
    ```sh
    mise run launchd:install
    ```
 
-3. アンインストール:
+3. 初回のみ、ランチャーに Full Disk Access を付与する。launchd ジョブは許可のプロンプトを
+   出せないため手動で行う:
+
+   System Settings > Privacy & Security > Full Disk Access で追加ボタンを押し、
+   ファイル選択ダイアログで Cmd+Shift+G を押して
+   `~/Library/Application Support/audio-scribe/bin` を入力し、`audio-scribe-launcher` を選ぶ。
+
+4. 動作確認:
+
+   ```sh
+   launchctl kickstart -k gui/$(id -u)/com.iimuz.audio-scribe
+   mise run launchd:logs
+   ```
+
+   ログに `Operation not permitted` が出なければ許可は有効です。処理済みのファイルは
+   スキップされるため、新規ファイルが無ければ短時間で終わります。
+
+5. アンインストール:
 
    ```sh
    mise run launchd:uninstall
    ```
+
+   ランチャーとラッパー (`run.sh`) は残ります。再インストール時に Full Disk Access を
+   再付与せずに済ませるためです。不要なら
+   `~/Library/Application Support/audio-scribe` を手動で削除してください。
 
 前提: 既定の agent (ollama) を使う場合、スケジュール実行時に ollama サーバーが起動している必要があります。
 
@@ -112,7 +138,15 @@ macOS では launchd により毎日決まった時刻に `run_audio_scribe_batc
 
 - 同一ジョブの実行中はスケジュール時刻が来ても多重起動されません。
 - 処理済み (summary あり) のファイルはスキップされるため再実行は冪等です。
-- `AUDIO_SCRIBE_TARGET_DIR` の変更は次回実行から反映されます (再インストール不要です)。
+- `AUDIO_SCRIBE_TARGET_DIR` と `AUDIO_SCRIBE_AGENT` の変更は次回実行から反映されます (再インストール不要です)。
+- リポジトリや mise のパスが変わった場合は `mise run launchd:install` を再実行してください。
+  ラッパーだけが再描画され、ランチャーは再ビルドされないため Full Disk Access は維持されます。
+- ランチャーを再ビルドすると code identity が変わり Full Disk Access が失効します。
+  `launcher.c` を変更した場合はランチャーを削除してから install し直し、Full Disk Access を
+  再付与してください (System Settings の一覧に古い項目が残っていれば削除して再追加する)。
+- 既にこの機能を旧方式 (mise 直接起動) でインストール済みの場合は、`mise run launchd:install`
+  を再実行してランチャー方式へ移行してください。移行後はランチャーへの Full Disk Access 付与が
+  必要です (旧来 `mise` に付与していた許可は、必要であれば System Settings から削除しても構いません)。
 
 ## Development
 

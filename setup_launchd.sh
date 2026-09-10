@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Installs or uninstalls the launchd agent that runs
-# run_audio_scribe_batch.sh on a daily schedule via mise.
+# run_audio_scribe_batch.sh on a daily schedule via a dedicated launcher
+# binary and mise.
 #
-# Required tools: bash, launchctl (macOS), mise
-# Required sibling: com.iimuz.audio-scribe.plist.template
+# Required tools: bash, launchctl, codesign, cc (Command Line Tools), mise
+# Required siblings: com.iimuz.audio-scribe.plist.template,
+#                    launchd_wrapper.sh.template, launcher.c
 
 SCRIPT_NAME=$(basename "${0}")
 readonly SCRIPT_NAME
@@ -15,6 +17,14 @@ readonly LAUNCHD_LABEL="com.iimuz.audio-scribe"
 readonly TEMPLATE_FILE="${SCRIPT_DIR}/${LAUNCHD_LABEL}.plist.template"
 readonly PLIST_DEST="${HOME}/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
 readonly LOG_PATH="${HOME}/Library/Logs/audio-scribe.log"
+readonly WRAPPER_TEMPLATE_FILE="${SCRIPT_DIR}/launchd_wrapper.sh.template"
+readonly LAUNCHER_SRC="${SCRIPT_DIR}/launcher.c"
+# TCC (Full Disk Access) binds to the launcher's code identity, so it lives
+# outside the repository and outside any package manager's reach.
+readonly LAUNCHER_DIR="${HOME}/Library/Application Support/audio-scribe/bin"
+readonly LAUNCHER_PATH="${LAUNCHER_DIR}/audio-scribe-launcher"
+readonly WRAPPER_PATH="${LAUNCHER_DIR}/run.sh"
+readonly LAUNCHER_IDENTIFIER="${LAUNCHD_LABEL}.launcher"
 
 function log_info() {
   local message="$1"
@@ -39,9 +49,14 @@ Installs or uninstalls the launchd agent (${LAUNCHD_LABEL}) that runs
 run_audio_scribe_batch.sh on a daily schedule.
 
 COMMANDS:
-  install    Render the plist template, place it under ~/Library/LaunchAgents,
-             and load it via launchctl bootstrap (idempotent).
+  install    Render the wrapper script and plist, build and ad-hoc sign the
+             launcher binary if missing or stale, place the plist under
+             ~/Library/LaunchAgents, and load it via launchctl bootstrap
+             (idempotent). The launcher must be granted Full Disk Access
+             once, by hand, in System Settings.
   uninstall  Unload the agent via launchctl bootout and remove the plist.
+             The launcher and wrapper are kept so the Full Disk Access grant
+             survives a reinstall.
 
 OPTIONS:
   -h, --help     Show this help message
@@ -77,48 +92,122 @@ function validate_schedule_value() {
   fi
 }
 
-# Escapes &, < and > for safe embedding in plist XML text nodes.
+# Escapes &, < and > for safe embedding in plist XML text nodes. The
+# replacement text embeds a literal "&", which under the patsub_replacement
+# shell option (on by default since bash 5.2) must be backslash-escaped or
+# bash treats it as "the text matched by pattern" (sed-style); older bash
+# (including macOS system /bin/bash 3.2) has no such option and never
+# treats "&" specially, so the escaped form there would leak a literal
+# backslash into the output instead of protecting it.
 function xml_escape() {
   local value="$1"
-  value="${value//&/\&amp;}"
-  value="${value//</\&lt;}"
-  value="${value//>/\&gt;}"
+  if shopt -q patsub_replacement 2>/dev/null; then
+    value="${value//&/\&amp;}"
+    value="${value//</\&lt;}"
+    value="${value//>/\&gt;}"
+  else
+    value="${value//&/&amp;}"
+    value="${value//</&lt;}"
+    value="${value//>/&gt;}"
+  fi
   printf '%s' "$value"
 }
 
 # Escapes a string for safe use as the replacement text of
-# ${content//pattern/replacement}: bash treats an unescaped "&" there as
-# "the text matched by pattern" (sed-style), so a literal "&" (e.g. from
-# xml_escape's "&amp;") must be backslash-escaped, and literal backslashes
-# escaped in turn, or it gets swallowed/misinterpreted during substitution.
+# ${content//pattern/replacement}: under patsub_replacement, bash treats an
+# unescaped "&" there as "the text matched by pattern" (sed-style), so a
+# literal "&" (e.g. from xml_escape's "&amp;") must be backslash-escaped,
+# and literal backslashes escaped in turn, or it gets
+# swallowed/misinterpreted during substitution. Older bash never treats "&"
+# specially and has no such option, so escaping there would corrupt the
+# output instead of protecting it.
 function bash_repl_escape() {
   local value="$1"
-  value="${value//\\/\\\\}"
-  value="${value//&/\\&}"
+  if shopt -q patsub_replacement 2>/dev/null; then
+    value="${value//\\/\\\\}"
+    value="${value//&/\\&}"
+  fi
   printf '%s' "$value"
 }
 
-# Renders TEMPLATE_FILE to stdout, replacing {{...}} placeholders.
-# render_plist <mise-bin> <repo-dir> <hour> <minute> <log-path>
-function render_plist() {
-  local mise_bin repo_dir hour minute log_path
-  mise_bin=$(bash_repl_escape "$(xml_escape "$1")")
-  repo_dir=$(bash_repl_escape "$(xml_escape "$2")")
-  hour=$(bash_repl_escape "$(xml_escape "$3")")
-  minute=$(bash_repl_escape "$(xml_escape "$4")")
-  log_path=$(bash_repl_escape "$(xml_escape "$5")")
+# Renders <template-file> to stdout, replacing each {{NAME}} with VALUE.
+# Values must already be escaped for the target format by the caller.
+# render_template <template-file> [NAME VALUE]...
+function render_template() {
+  local template_file="$1"
+  shift
   local content
-  content=$(<"$TEMPLATE_FILE")
-  content="${content//\{\{MISE_BIN\}\}/${mise_bin}}"
-  content="${content//\{\{REPO_DIR\}\}/${repo_dir}}"
-  content="${content//\{\{SCHEDULE_HOUR\}\}/${hour}}"
-  content="${content//\{\{SCHEDULE_MINUTE\}\}/${minute}}"
-  content="${content//\{\{LOG_PATH\}\}/${log_path}}"
+  content=$(<"$template_file")
+  local name value
+  while [[ $# -ge 2 ]]; do
+    name="$1"
+    value=$(bash_repl_escape "$2")
+    content="${content//\{\{${name}\}\}/${value}}"
+    shift 2
+  done
   if [[ "$content" == *'{{'* ]]; then
-    log_err "Unreplaced placeholder remains in rendered plist"
+    log_err "Unreplaced placeholder remains in rendered ${template_file##*/}"
     return 1
   fi
   printf '%s\n' "$content"
+}
+
+# render_plist <launcher-path> <hour> <minute> <log-path>
+function render_plist() {
+  render_template "$TEMPLATE_FILE" \
+    LAUNCHER_PATH "$(xml_escape "$1")" \
+    SCHEDULE_HOUR "$(xml_escape "$2")" \
+    SCHEDULE_MINUTE "$(xml_escape "$3")" \
+    LOG_PATH "$(xml_escape "$4")"
+}
+
+# render_wrapper <mise-bin> <repo-dir>
+function render_wrapper() {
+  render_template "$WRAPPER_TEMPLATE_FILE" \
+    MISE_BIN "$(printf '%q' "$1")" \
+    REPO_DIR "$(printf '%q' "$2")"
+}
+
+# Returns 0 when the launcher must be (re)built: it is missing, or the
+# embedded wrapper path differs from <wrapper-path>. Source mtime is
+# deliberately ignored: a rebuild changes the code identity and revokes the
+# Full Disk Access grant, so it must only happen when unavoidable.
+# launcher_needs_build <launcher-path> <wrapper-path>
+function launcher_needs_build() {
+  local launcher_path="$1" wrapper_path="$2"
+  [[ -x "$launcher_path" ]] || return 0
+  if grep -aqF -- "$wrapper_path" "$launcher_path"; then
+    return 1
+  fi
+  return 0
+}
+
+# Compiles launcher.c with <wrapper-path> baked in and ad-hoc signs it.
+# build_launcher <launcher-path> <wrapper-path>
+function build_launcher() {
+  local launcher_path="$1" wrapper_path="$2"
+  if ! xcode-select -p >/dev/null 2>&1; then
+    log_err "Command Line Tools not found. Install with: xcode-select --install"
+    return 1
+  fi
+  local tmp="${launcher_path}.tmp.$$"
+  log_info "Building launcher: ${launcher_path}"
+  if ! /usr/bin/cc -O2 -DSCRIPT_PATH="\"${wrapper_path}\"" -o "$tmp" "$LAUNCHER_SRC"; then
+    rm -f "$tmp"
+    log_err "Failed to compile launcher"
+    return 1
+  fi
+  if ! codesign --force --sign - --identifier "$LAUNCHER_IDENTIFIER" "$tmp"; then
+    rm -f "$tmp"
+    log_err "Failed to sign launcher"
+    return 1
+  fi
+  if ! mv "$tmp" "$launcher_path"; then
+    rm -f "$tmp"
+    log_err "Failed to install launcher binary"
+    return 1
+  fi
+  log_err "WARNING: launcher was (re)built; grant Full Disk Access to it again: ${launcher_path}"
 }
 
 # Parses CLI arguments. Sets readonly globals: COMMAND, VERBOSE
@@ -171,10 +260,13 @@ function parse_args() {
 }
 
 function cmd_install() {
-  if [[ ! -r "$TEMPLATE_FILE" ]]; then
-    log_err "Template not found or not readable: ${TEMPLATE_FILE}"
-    exit 1
-  fi
+  local required
+  for required in "$TEMPLATE_FILE" "$WRAPPER_TEMPLATE_FILE" "$LAUNCHER_SRC"; do
+    if [[ ! -r "$required" ]]; then
+      log_err "Required file not found or not readable: ${required}"
+      exit 1
+    fi
+  done
 
   local mise_bin
   if ! mise_bin=$(command -v mise); then
@@ -191,11 +283,26 @@ function cmd_install() {
     log_err "WARNING: AUDIO_SCRIBE_TARGET_DIR is not set. Set it in .env before the first scheduled run."
   fi
 
-  mkdir -p "$(dirname "$PLIST_DEST")" "$(dirname "$LOG_PATH")"
+  mkdir -p "$(dirname "$PLIST_DEST")" "$(dirname "$LOG_PATH")" "$LAUNCHER_DIR"
   : >>"$LOG_PATH"
 
+  local tmp_wrapper="${WRAPPER_PATH}.tmp.$$"
+  if ! render_wrapper "$mise_bin" "$SCRIPT_DIR" >"$tmp_wrapper"; then
+    rm -f "$tmp_wrapper"
+    log_err "Failed to render wrapper script"
+    exit 1
+  fi
+  chmod 755 "$tmp_wrapper"
+  mv "$tmp_wrapper" "$WRAPPER_PATH"
+
+  if launcher_needs_build "$LAUNCHER_PATH" "$WRAPPER_PATH"; then
+    build_launcher "$LAUNCHER_PATH" "$WRAPPER_PATH" || exit 1
+  else
+    log_info "Launcher up to date: ${LAUNCHER_PATH}"
+  fi
+
   local rendered
-  rendered=$(render_plist "$mise_bin" "$SCRIPT_DIR" "$hour" "$minute" "$LOG_PATH")
+  rendered=$(render_plist "$LAUNCHER_PATH" "$hour" "$minute" "$LOG_PATH")
 
   local tmp_plist="${PLIST_DEST}.tmp.$$"
   printf '%s\n' "$rendered" >"$tmp_plist"
@@ -215,12 +322,16 @@ function cmd_install() {
   log_info "Installed launchd agent: ${LAUNCHD_LABEL}"
   log_info "Schedule: daily at $(printf '%02d' "$((10#$hour))"):$(printf '%02d' "$((10#$minute))")"
   log_info "Log file: ${LOG_PATH}"
+  log_info "Launcher: ${LAUNCHER_PATH}"
+  log_info "First install or rebuilt launcher: add the launcher to System Settings > Privacy & Security > Full Disk Access (press Cmd+Shift+G in the file dialog and enter: ${LAUNCHER_DIR})"
+  log_info "Then verify with: launchctl kickstart -k gui/$(id -u)/${LAUNCHD_LABEL} && mise run launchd:logs"
 }
 
 function cmd_uninstall() {
   launchctl bootout "gui/$(id -u)/${LAUNCHD_LABEL}" 2>/dev/null || true
   rm -f "$PLIST_DEST"
   log_info "Uninstalled launchd agent: ${LAUNCHD_LABEL}"
+  log_info "Launcher and wrapper are kept so the Full Disk Access grant survives a reinstall. Remove by hand if no longer needed: ${LAUNCHER_DIR}"
 }
 
 function main() {

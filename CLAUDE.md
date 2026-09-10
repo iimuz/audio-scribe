@@ -90,25 +90,54 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 
 ## launchd による定期実行
 
-macOS では [setup_launchd.sh](setup_launchd.sh) が
-[com.iimuz.audio-scribe.plist.template](com.iimuz.audio-scribe.plist.template) を描画して
-`~/Library/LaunchAgents/com.iimuz.audio-scribe.plist` に配置し、launchd で
-`run_audio_scribe_batch.sh` を毎日定時実行する (`mise run launchd:install` /
-`mise run launchd:uninstall`)。実行ログは `mise run launchd:logs` で追跡できる。
+macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
+`com.iimuz.audio-scribe` を導入し、`run_audio_scribe_batch.sh` を毎日定時実行する
+(`mise run launchd:install` / `mise run launchd:uninstall`)。実行ログは
+`mise run launchd:logs` で追跡できる。
 
-- plist は `mise exec -- bash -c 'exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${AUDIO_SCRIBE_TARGET_DIR:?...}"'`
-  を WorkingDirectory=リポジトリで起動する。mise が .env とツール PATH を解決するため、
-  対象ディレクトリ (`AUDIO_SCRIBE_TARGET_DIR`) と LLM agent (`AUDIO_SCRIBE_AGENT`、任意、
-  既定 ollama) は実行時に .env から解決され、変更に再インストールは不要。`${VAR:+...}` を
-  意図的に引用符で囲まないのは、未設定時に空文字列の引数を渡さないためであり、
-  agent の値は ollama / claude のみで空白を含まないため単語分割は問題にならない。
+起動の連鎖は launchd → ランチャー → ラッパー → mise → batch スクリプトである。
+
+- ランチャー `~/Library/Application Support/audio-scribe/bin/audio-scribe-launcher` は
+  [launcher.c](launcher.c) をコンパイルしたもので、コンパイル時に埋め込んだラッパーの絶対パス
+  だけを `execl("/bin/bash", ...)` で実行し、引数を受け付けない。`codesign --sign -` で
+  adhoc 署名する (識別子 `com.iimuz.audio-scribe.launcher`)。macOS の TCC (Full Disk Access)
+  は実行バイナリの code identity に紐づくため、パッケージマネージャが更新する mise を起点に
+  すると更新ごとに許可が失効する。更新されないこのバイナリを起点にすることで、mise やその配下の
+  bash / whisperx / node / ffmpeg の更新が TCC に影響しなくなる。
+- ラッパー `~/Library/Application Support/audio-scribe/bin/run.sh` は
+  [launchd_wrapper.sh.template](launchd_wrapper.sh.template) から install ごとに描画され、
+  `cd <リポジトリ>` の後に
+  `exec <mise> exec -- bash -c 'exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${AUDIO_SCRIBE_TARGET_DIR:?...}"'`
+  を実行する。パスは `printf '%q'` でシェル引用して埋め込む。mise が .env とツール PATH を
+  解決するため、対象ディレクトリ (`AUDIO_SCRIBE_TARGET_DIR`) と LLM agent
+  (`AUDIO_SCRIBE_AGENT`、任意、既定 ollama) は実行時に .env から解決され、変更に再インストールは
+  不要。`${VAR:+...}` を意図的に引用符で囲まないのは、未設定時に空文字列の引数を渡さないため
+  であり、agent の値は ollama / claude のみで空白を含まないため単語分割は問題にならない。
+- ランチャーに埋め込むパスはラッパーの固定パスで `HOME` にしか依存しないため、リポジトリや mise
+  のパス変更はラッパーの再描画で吸収され、ランチャーの再ビルドは不要である。再ビルドは
+  「バイナリ不在」または「埋め込みパス不一致」のときだけ行う (`launcher_needs_build`)。
+  ソースの mtime は判定に使わない。git checkout で mtime が変わるだけで再ビルドされ、
+  Full Disk Access が失効するのを避けるためである。`launcher.c` を変更したときはバイナリを
+  削除して install し直す。
+- plist ([com.iimuz.audio-scribe.plist.template](com.iimuz.audio-scribe.plist.template)) の
+  `ProgramArguments` はランチャー 1 個のみで、`WorkingDirectory` は持たない (ラッパーの `cd` に
+  一本化)。plist と ラッパーの描画は `render_template` で共通化し、plist 側は XML エスケープ、
+  ラッパー側はシェル引用を適用する。
+- Full Disk Access の付与は初回 (およびランチャー再ビルド時) に System Settings で手動で行う。
+  launchd ジョブはプロンプトを出せない。install は `launchctl kickstart` を行わない
+  (whisperx を含む本番バッチが走るため)。確認は
+  `launchctl kickstart -k gui/$(id -u)/com.iimuz.audio-scribe` で手動で行う。
+- uninstall は plist の削除のみで、ランチャーとラッパーは残す (再インストール時に Full Disk
+  Access を再付与しなくてよいようにするため)。
 - スケジュール時刻 (`AUDIO_SCRIBE_SCHEDULE_HOUR` 既定 3 / `AUDIO_SCRIBE_SCHEDULE_MINUTE` 既定 0) は
   インストール時に plist へ埋め込まれるため、変更時は `mise run launchd:install` の再実行が必要である。
 - 標準出力・標準エラーは `~/Library/Logs/audio-scribe.log` へ追記される。ジョブ状態は
   `launchctl print gui/$(id -u)/com.iimuz.audio-scribe` で確認できる。
 - launchd は同一ラベルのジョブ実行中は次回起動をスキップするためロック機構は持たない。
-- テスト (`tests/setup_launchd.bats`) は描画・検証の純粋関数のみを対象とし、
-  launchctl / plutil / mise には依存しない (CI は ubuntu のため)。
+- テスト (`tests/setup_launchd.bats`) は描画・検証の純粋関数 (`render_plist`、`render_wrapper`、
+  `launcher_needs_build`、`validate_schedule_value`) のみを対象とし、
+  cc / codesign / launchctl / plutil / mise には依存しない (CI は ubuntu のため)。
+  `launcher_needs_build` はパス文字列を含むダミーファイルで検証する。
 
 ## データディレクトリ
 
