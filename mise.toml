@@ -4,13 +4,13 @@ bats = "1.14.0"
 # 最終位置でないアサーションの失敗を無視するため、テストを走らせる bash を固定する。
 "conda:bash" = "5.2.37"
 ffmpeg = "7.1.1"
-node = "24.19.0"
+node = "24.20.0"
 pnpm = "12.3.4"
 shellcheck = "0.11.0"
-shfmt = "v3.13.1"
+shfmt = "3.14.0"
 taplo = "0.10.0"
 "pipx:whisperx" = "v3.8.6"
-uv = "0.12.7"
+uv = "0.12.10"
 
 [env]
 _.file = ".env"
