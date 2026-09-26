@@ -7,10 +7,10 @@ ffmpeg = "7.1.1"
 node = "24.20.0"
 pnpm = "11.25.0"
 shellcheck = "0.11.0"
-shfmt = "3.14.0"
+shfmt = "3.14.1"
 taplo = "0.10.0"
 "pipx:whisperx" = "v3.8.6"
-uv = "0.12.10"
+uv = "0.12.13"
 
 [env]
 _.file = ".env"
