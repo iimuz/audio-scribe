@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Audio transcription and summarization pipeline.
 #
-# Required tools: bash, ffmpeg, uv (whisperx), jq, curl, ollama
+# Required tools: bash, ffmpeg, uv (runs transcribe.py with whisperx), jq, curl, ollama
 #
 # ENV:
 #   HF_TOKEN   HuggingFace token for speaker diarization.
@@ -107,16 +107,8 @@ function transcribe() {
   readonly hf_token
 
   log_info "Running whisperx: ${input_wav}"
-  uv run whisperx "$input_wav" \
-    --output_dir "$interim_dir" \
-    --model large-v3-turbo \
-    --diarize \
-    --output_format srt \
-    --device cpu \
-    --batch_size 4 \
-    --language ja \
-    --compute_type int8 \
-    --hf_token="$hf_token"
+  HF_TOKEN="$hf_token" uv run --project "$SCRIPT_DIR" "$SCRIPT_DIR/transcribe.py" \
+    "$input_wav" "$interim_dir"
 
   local base
   base=$(basename "$input_wav" .wav)
