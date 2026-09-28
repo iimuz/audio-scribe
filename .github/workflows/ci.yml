@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  MISE_DISABLE_TOOLS: pipx:whisperx,ffmpeg,uv
+  MISE_DISABLE_TOOLS: ffmpeg,uv
 
 jobs:
   lint:

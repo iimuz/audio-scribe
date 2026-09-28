@@ -6,11 +6,11 @@ bats = "1.14.0"
 ffmpeg = "7.1.1"
 node = "24.20.0"
 pnpm = "12.3.4"
+ruff = "0.16.9"
 shellcheck = "0.11.0"
-shfmt = "3.14.0"
+shfmt = "3.14.1"
 taplo = "0.10.0"
-"pipx:whisperx" = "v3.8.6"
-uv = "0.12.10"
+uv = "0.12.13"
 
 [env]
 _.file = ".env"
@@ -97,6 +97,23 @@ else
 fi
 '''
 
+[tasks."format:py"]
+description = "ruff で Python を整形 (--check で崩れを検査)"
+usage = '''
+arg "[files]" var=#true
+flag "--check"
+'''
+run = '''
+files=${usage_files:-$(git ls-files -co --exclude-standard '*.py' | tr '\n' ' ')}
+if [ -z "$files" ]; then exit 0; fi
+eval "set -- $files"
+if [ -n "${usage_check:-}" ]; then
+  ruff format --check "$@"
+else
+  ruff format "$@"
+fi
+'''
+
 [tasks."format:cspell"]
 description = ".cspell.json の words を整列"
 usage = '''
@@ -112,6 +129,7 @@ pnpm exec prettier --write .cspell.json
 description = "全ファイルを整形"
 depends = [
   "format:sh",
+  "format:py",
   "format:yaml",
   "format:md",
   "format:toml",
@@ -122,6 +140,7 @@ depends = [
 description = "全ファイルの整形崩れを検査"
 depends = [
   "format:sh --check",
+  "format:py --check",
   "format:yaml --check",
   "format:md --check",
   "format:toml --check",
@@ -137,6 +156,18 @@ files=${usage_files:-$(git ls-files -co --exclude-standard '*.sh' | tr '\n' ' ')
 if [ -z "$files" ]; then exit 0; fi
 eval "set -- $files"
 shellcheck -- "$@"
+'''
+
+[tasks."lint:py"]
+description = "ruff で Python を検査"
+usage = '''
+arg "[files]" var=#true
+'''
+run = '''
+files=${usage_files:-$(git ls-files -co --exclude-standard '*.py' | tr '\n' ' ')}
+if [ -z "$files" ]; then exit 0; fi
+eval "set -- $files"
+ruff check -- "$@"
 '''
 
 [tasks."lint:md"]
@@ -165,7 +196,9 @@ pnpm exec cspell lint --no-progress --no-must-find-files "$@"
 description = "全ファイルを検査"
 depends = [
   "lint:sh",
+  "lint:py",
   "lint:md",
+  "format:py --check",
   "format:yaml --check",
   "format:md --check",
   "format:toml --check",
