@@ -8,3 +8,9 @@ dependencies = ["whisperx==3.8.6"]
 package = false
 environments = ["sys_platform == 'darwin' and platform_machine == 'arm64'"]
 constraint-dependencies = ["pyannote-audio==4.0.4", "ctranslate2==4.8.0"]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

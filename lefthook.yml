@@ -16,6 +16,10 @@ pre-commit:
             glob: "*.sh"
             stage_fixed: true
             run: mise run format:sh {staged_files}
+          - name: ruff format
+            glob: "*.py"
+            stage_fixed: true
+            run: mise run format:py {staged_files}
           - name: markdown
             glob: "*.md"
             stage_fixed: true
@@ -51,6 +55,12 @@ pre-commit:
           - name: shellcheck
             glob: "*.sh"
             run: mise run lint:sh {staged_files}
+          - name: ruff format check
+            glob: "*.py"
+            run: mise run format:py --check {staged_files}
+          - name: ruff check
+            glob: "*.py"
+            run: mise run lint:py {staged_files}
           - name: spell check
             run: mise run lint:cspell {staged_files}
     - name: test
