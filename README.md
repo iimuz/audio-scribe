@@ -7,8 +7,9 @@ ffmpeg, whisperx, ollama を利用して書き起こしから要約作成まで�
 
 ## Prerequisites
 
-- [mise](https://mise.jdx.dev/): ffmpeg や whisperx などの依存ツールは mise が
-  導入するため、ホストにあらかじめ必要なのは mise のみです。
+- [mise](https://mise.jdx.dev/): ffmpeg や uv などの依存ツールは mise が導入するため、
+  ホストにあらかじめ必要なのは mise のみです。whisperx とその依存は uv プロジェクト
+  (`pyproject.toml` / `uv.lock`) で固定され、初回実行時に uv が `.venv` に導入します。
 - HuggingFace トークン: 話者分離に必要です。pyannote 系モデルの利用規約に
   同意したアカウントのトークンを用意してください。
 - LLM agent (いずれか一方):
@@ -31,6 +32,8 @@ mise run setup
 ```sh
 HF_TOKEN=hf_xxxxxxxxxxxxxxxx
 ```
+
+初回実行時のダウンロード待ちを避けたい場合は、事前に `uv sync` を実行しておきます。
 
 ## Usage
 

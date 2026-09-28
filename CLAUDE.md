@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 会議の録画動画・音声から文字起こしを行い、要約まで生成するパイプライン。
 処理の本体は単一の Bash スクリプト [run_audio_scribe.sh](run_audio_scribe.sh) で、
-`ffmpeg` → `whisperx` → LLM agent (既定: ollama) を順に呼び出す。Python パッケージは存在せず、
-Node のツールチェーンはリンタ・フォーマッタ・spell check のためだけに導入されている。
+`ffmpeg` → `whisperx` → LLM agent (既定: ollama) を順に呼び出す。whisperx の呼び出しにだけ、
+パッケージ化しない uv プロジェクト ([pyproject.toml](pyproject.toml)、[transcribe.py](transcribe.py))
+を使う。Node のツールチェーンはリンタ・フォーマッタ・spell check のためだけに導入されている。
 
 ## パイプライン
 
@@ -34,8 +35,14 @@ ENV:
 処理の流れ (`base` = 拡張子なしのファイル名、`video_dir` = 入力ファイルの親ディレクトリ):
 
 1. `ffmpeg` で入力から音声抽出 → `data/interim/<base>.wav` (16kHz / mono / pcm_s16le)。
-2. `whisperx` で WAV を文字起こし → `data/interim/<base>.srt`
-   (model `large-v3-turbo`、`--diarize` で話者分離、`--language ja`、CPU/int8)。
+2. [transcribe.py](transcribe.py) (`uv run --project <repo> transcribe.py <wav> <interim_dir>`)
+   で whisperx を Python API から呼び、WAV を文字起こし → `data/interim/<base>.srt`
+   (model `large-v3-turbo`、`--language ja`、文字起こし・アライメントは CPU / int8 /
+   batch size 4、スレッド数 8 (`torch.set_num_threads` と faster-whisper の `threads`)、
+   話者分離は MPS が使えれば MPS、なければ CPU)。
+   whisperx の CLI は `--device` が全工程に効き、faster-whisper (ctranslate2) は MPS に
+   非対応のため、話者分離だけを MPS にするには Python API が必要になる。HF_TOKEN は
+   環境変数で渡し、プロセス一覧に出さない。出力の同一性のため依存は `uv.lock` で固定する。
    結果を `video_dir/<base>-asr.srt` へコピーして永続化。
 3. LLM agent (既定: ollama、`--agent claude` で claude CLI) に 2 段階でテキストを渡す。
    校正と要約はそれぞれ別モデルを使う (`--proofread-model` / `--summarize-model`
@@ -153,9 +160,9 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
 ## ツールとコマンド
 
 ツールバージョンは [mise.toml](mise.toml) で固定
-(bash, bats, ffmpeg, node, pnpm, shellcheck, shfmt, taplo, uv, whisperx)。
-`.env` が mise 経由で読み込まれる。`uv` は whisperx (pipx バックエンド) の
-インストールに使用する。`bash` (`conda:bash`) を固定しているのは、macOS のシステム
+(bash, bats, ffmpeg, node, pnpm, ruff, shellcheck, shfmt, taplo, uv)。
+`.env` が mise 経由で読み込まれる。`uv` は whisperx の uv プロジェクトの実行に使用する。
+`bash` (`conda:bash`) を固定しているのは、macOS のシステム
 `/bin/bash` (3.2) では `set -e` が `[[ ]]` の失敗で停止せず、bats が最終位置でない
 アサーションの失敗を無視して false green になるためである
 (非 ASCII のテスト名が `unknown test name` になるのも同じ 3.2 の問題)。
@@ -163,25 +170,26 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
 
 - セットアップ: `mise run setup` (pnpm install と lefthook install)
 - クリーンアップ: `mise run clean` (node_modules の削除)
-- format: `mise run format` (shfmt、prettier (yaml / markdown)、taplo (toml)、
-  `.cspell.json` の words 整列)
+- format: `mise run format` (shfmt、ruff format、prettier (yaml / markdown)、
+  taplo (toml)、`.cspell.json` の words 整列)
 - format 検査: `mise run format:check`
-- lint: `mise run lint` (shellcheck、markdownlint-cli2、prettier --check
+- lint: `mise run lint` (shellcheck、ruff check、markdownlint-cli2、prettier --check
   (yaml / markdown)、taplo --check、cspell)
 - test: `mise run test` (bats による `tests/*.bats` の実行)
 - launchd: `mise run launchd:install` / `mise run launchd:uninstall` (定期実行の
   導入・解除)、`mise run launchd:logs` (実行ログの追跡)
 
-粒度別タスク (`format:sh` / `format:yaml` / `format:md` / `format:toml` /
-`lint:sh` / `lint:md` / `lint:cspell`) はファイルを引数に取れる
+粒度別タスク (`format:sh` / `format:py` / `format:yaml` / `format:md` / `format:toml` /
+`lint:sh` / `lint:py` / `lint:md` / `lint:cspell`) はファイルを引数に取れる
 (例: `mise run format:sh run_audio_scribe.sh`)。`format:cspell` と `test:sh` のみ
 引数を取らず、それぞれ常に `.cspell.json` の words 整列と全 bats スイート実行を行う。
 
 ## コミット時のフック
 
 [lefthook.yml](lefthook.yml) の pre-commit でステージ済みファイルに対し format、lint、test の各ジョブを順次実行する (format / lint ジョブ内のサブジョブはそれぞれ並列実行):
-prettier (yaml)、shfmt (Bash 整形)、markdown (Markdown 整形)、toml (TOML 整形)、
-cspell 辞書 (`.cspell.json`) の整列、shellcheck (Bash 静的検査)、prettier-md-check
+prettier (yaml)、shfmt (Bash 整形)、ruff format (Python 整形)、markdown (Markdown 整形)、
+toml (TOML 整形)、cspell 辞書 (`.cspell.json`) の整列、shellcheck (Bash 静的検査)、
+ruff format check、ruff check (Python 静的検査)、prettier-md-check
 (Markdown 整形検査)、markdownlint (Markdown 静的検査)、taplo-check (TOML 整形検査)、
 spell check。
 各ジョブは mise の粒度別タスクを呼び出すため、コマンド定義は
@@ -196,9 +204,9 @@ staged files を引数として渡すのは cspell 辞書整列と test 以外�
 push をトリガーに lint (`mise run lint`)、format (`mise run format:check`)、
 test (`mise run test`) を並列実行し、`status-check` ジョブが全ジョブの結果を集約する
 (branch protection の required check は `status-check` を想定)。ツール導入は
-jdx/mise-action で行い、CI に不要な重量ツール (`pipx:whisperx` / `ffmpeg` / `uv`) は
-`MISE_DISABLE_TOOLS` で無効化する。ランナーは `ubuntu-24.04-arm`。action は commit
-SHA でピン留めする。
+jdx/mise-action で行い、CI に不要な重量ツール (`ffmpeg` / `uv`) は
+`MISE_DISABLE_TOOLS` で無効化する (CI は Python を実行しないため uv は無効のまま)。
+ランナーは `ubuntu-24.04-arm`。action は commit SHA でピン留めする。
 
 main への push でも実行するのは、GitHub Actions のキャッシュがブランチスコープで
 隔離されているため。pull_request の実行では merge ref (`refs/pull/N/merge`) の
@@ -219,7 +227,9 @@ digest は automerge する (branch protection の required check である
 status-check の通過が前提)。minimumReleaseAge は 14 days (pin / digest は
 0 days)。デフォルトの GITHUB_TOKEN では Renovate の PR で CI がトリガー
 されないため、repo scope (workflow 含む) の PAT をリポジトリ secret
-RENOVATE_TOKEN に登録して使う。
+RENOVATE_TOKEN に登録して使う。既定で有効な pep621 manager により
+`pyproject.toml` と `uv.lock` も更新対象になる。lockFileMaintenance は
+有効にしていないため、間接依存は直接依存の更新時以外は動かない。
 
 ## 注意
 

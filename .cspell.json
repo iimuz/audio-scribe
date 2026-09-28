@@ -7,6 +7,7 @@
     "bootout",
     "claude",
     "codesign",
+    "ctranslate",
     "dscript",
     "dtds",
     "eeuo",
@@ -56,6 +57,8 @@
     "requirements*.txt",
     "docs/superpowers/**",
     "docs/tmp/**",
-    ".gitignore"
+    ".gitignore",
+    "**/.venv/**",
+    "uv.lock"
   ]
 }
