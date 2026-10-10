@@ -11,7 +11,8 @@ ffmpeg, whisperx, ollama を利用して書き起こしから要約作成まで�
   ホストにあらかじめ必要なのは mise のみです。whisperx とその依存は uv プロジェクト
   (`pyproject.toml` / `uv.lock`) で固定され、初回実行時に uv が `.venv` に導入します。
 - HuggingFace トークン: 話者分離に必要です。pyannote 系モデルの利用規約に
-  同意したアカウントのトークンを用意してください。
+  同意したアカウントのトークンを用意してください。モデルを一度ダウンロードして
+  キャッシュ (`~/.cache/huggingface/hub`) に置いた後は、トークンなしでも動作します。
 - LLM agent (いずれか一方):
   - [ollama](https://ollama.com/) (既定): ローカルで起動し、既定モデル
     `gemma4:4b-it-qat` と `gemma4:12b-it-qat` を事前に pull しておきます。
@@ -54,8 +55,12 @@ HF_TOKEN=hf_xxxxxxxxxxxxxxxx
 
 環境変数:
 
-- `HF_TOKEN`: HuggingFace トークン。話者分離に必要で、未設定の場合は警告を
-  出して dummy で続行しますが話者分離は失敗しえます。
+- `HF_TOKEN`: HuggingFace トークン。話者分離のモデル
+  (`pyannote/speaker-diarization-community-1`、gated) の取得に使います。
+  未設定の場合は警告を出して続行し、モデルがキャッシュにあれば話者分離も
+  成功します。キャッシュがない場合は文字起こしの後に話者分離のモデルの取得で
+  失敗し、そのファイルの処理は中断します。`hf auth login` でトークンを保存して
+  いる場合は、それが使われます。
 - `API_URL`: ollama API エンドポイント
   (既定: `http://localhost:11434/api/generate`)
 - `NUM_CTX`: ollama のコンテキスト長 (トークン、既定: 131072)

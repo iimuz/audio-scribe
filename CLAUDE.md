@@ -27,7 +27,7 @@ OPTIONS:
                             (既定: ollama=gemma4:12b-it-qat, claude=sonnet)
 
 ENV:
-  HF_TOKEN   HuggingFace トークン (話者分離に必要; 未設定時は dummy で続行し警告)
+  HF_TOKEN   HuggingFace トークン (話者分離のモデル取得に必要; 未設定時は警告して続行し、キャッシュがあれば成功)
   API_URL    ollama API エンドポイント (既定: http://localhost:11434/api/generate)
   NUM_CTX    ollama のコンテキスト長 (トークン; 既定: 131072)
 ```
@@ -92,8 +92,13 @@ ollama へのプロンプトは外部 Markdown ファイル ([prompts/proofread.
 
 ### HF_TOKEN
 
-`HF_TOKEN` は環境変数から読み込む。未設定または空の場合は警告を出して `dummy` で続行するが、
-話者分離は失敗しうる。実運用では `HF_TOKEN` を設定してから実行すること。
+`HF_TOKEN` は環境変数から読み込み、そのまま `transcribe.py` に渡す。話者分離のモデル
+`pyannote/speaker-diarization-community-1` は gated で、トークンが要るのはその取得時だけである。
+未設定または空の場合は WARN を出して続行する。モデルが HF キャッシュにあればトークンなしでも
+話者分離は成功し、なければ文字起こしとアライメントの後にモデルの取得で失敗する。
+`dummy` などの代替値は入れない。文字列のトークンを渡すと、huggingface_hub が `hf auth login`
+で保存したトークンを使わなくなるためである。launchd 経由の実行でも mise が .env を読み込むので、
+.env に書いた `HF_TOKEN` は渡る。
 
 ## launchd による定期実行
 
