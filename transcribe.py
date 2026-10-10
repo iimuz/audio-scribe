@@ -40,7 +40,8 @@ def main() -> None:
     args = parse_args()
     setup_logging("info")
     logger = get_logger(__name__)
-    token = os.environ.get("HF_TOKEN")
+    # "" would be sent as-is; None lets huggingface_hub fall back to a saved login.
+    token = os.environ.get("HF_TOKEN") or None
 
     # faster-whisper (ctranslate2) has no MPS backend, so only diarization,
     # which runs on pyannote/torch, can use MPS.

@@ -4,8 +4,9 @@
 # Required tools: bash, ffmpeg, uv (runs transcribe.py with whisperx), jq, curl, ollama
 #
 # ENV:
-#   HF_TOKEN   HuggingFace token for speaker diarization.
-#              If unset or empty, falls back to "dummy" with a warning.
+#   HF_TOKEN   HuggingFace token for speaker diarization (gated pyannote model).
+#              If unset or empty, logs a warning and continues; diarization then
+#              works only when the model is already in the HuggingFace cache.
 #   API_URL    ollama API endpoint (default: http://localhost:11434/api/generate)
 #   NUM_CTX    ollama context window in tokens (default: 131072)
 
@@ -36,6 +37,11 @@ TMP_FILES=()
 function log_info() {
   local message="$1"
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$SCRIPT_NAME] [INFO] $message" >&2
+}
+
+function log_warn() {
+  local message="$1"
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$SCRIPT_NAME] [WARN] $message" >&2
 }
 
 function log_err() {
@@ -74,7 +80,7 @@ OPTIONS:
                             (default: ollama=gemma4:12b-it-qat, claude=sonnet)
 
 ENV:
-  HF_TOKEN   HuggingFace token (required for diarization; falls back to dummy)
+  HF_TOKEN   HuggingFace token (needed for diarization unless the model is cached)
   API_URL    ollama API (default: http://localhost:11434/api/generate)
   NUM_CTX    ollama context window in tokens (default: 131072)
 
@@ -97,17 +103,12 @@ function transcribe() {
   [[ $# -eq 3 ]] || err "${LINENO}" "transcribe requires 3 args"
   local input_wav="$1" interim_dir="$2" checkpoint_srt="$3"
 
-  local hf_token
   if [[ -z "${HF_TOKEN:-}" ]]; then
-    log_err "HF_TOKEN is not set; falling back to dummy. Diarization may fail."
-    hf_token="dummy"
-  else
-    hf_token="$HF_TOKEN"
+    log_warn "HF_TOKEN is not set; diarization needs a cached pyannote model and fails without one."
   fi
-  readonly hf_token
 
   log_info "Running whisperx: ${input_wav}"
-  HF_TOKEN="$hf_token" uv run --project "$SCRIPT_DIR" "$SCRIPT_DIR/transcribe.py" \
+  uv run --project "$SCRIPT_DIR" "$SCRIPT_DIR/transcribe.py" \
     "$input_wav" "$interim_dir"
 
   local base
