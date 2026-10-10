@@ -4,6 +4,25 @@ setup() {
   source "$BATS_TEST_DIRNAME/../run_audio_scribe.sh"
 }
 
+stub_uv() {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat >"$BATS_TEST_TMPDIR/bin/uv" <<'EOF'
+#!/usr/bin/env bash
+# Invoked as: uv run --project <dir> <script> <input_wav> <interim_dir>
+input_wav="$5"
+interim_dir="$6"
+mkdir -p "$interim_dir"
+if [[ -n "${HF_TOKEN+x}" ]]; then
+  printf 'set:%s\n' "$HF_TOKEN" >"$interim_dir/hf_token_seen"
+else
+  printf 'unset\n' >"$interim_dir/hf_token_seen"
+fi
+echo "1" >"$interim_dir/$(basename "$input_wav" .wav).srt"
+EOF
+  chmod +x "$BATS_TEST_TMPDIR/bin/uv"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
 @test "has_checkpoint: 存在しないファイルは未完了" {
   run has_checkpoint "$BATS_TEST_TMPDIR/missing.srt"
   [ "$status" -ne 0 ]
@@ -95,4 +114,53 @@ setup() {
   run parse_args
   [ "$status" -eq 1 ]
   [[ "$output" == *"Missing required argument"* ]]
+}
+
+@test "transcribe: HF_TOKEN 未設定なら WARN を出し、dummy を渡さない" {
+  stub_uv
+  unset HF_TOKEN
+  local interim="$BATS_TEST_TMPDIR/interim"
+  local checkpoint="$BATS_TEST_TMPDIR/meeting-asr.srt"
+
+  run transcribe "$BATS_TEST_TMPDIR/meeting.wav" "$interim" "$checkpoint"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[WARN] HF_TOKEN is not set"* ]]
+  [ "$(grep -c '\[WARN\]' <<<"$output")" -eq 1 ]
+  [[ "$output" != *"[ERROR]"* ]]
+  [ "$(cat "$interim/hf_token_seen")" = "unset" ]
+  [ -s "$checkpoint" ]
+}
+
+@test "transcribe: HF_TOKEN が空なら WARN を出し、空のまま渡す" {
+  stub_uv
+  export HF_TOKEN=""
+  local interim="$BATS_TEST_TMPDIR/interim"
+
+  run transcribe "$BATS_TEST_TMPDIR/meeting.wav" "$interim" "$BATS_TEST_TMPDIR/meeting-asr.srt"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[WARN] HF_TOKEN is not set"* ]]
+  [ "$(cat "$interim/hf_token_seen")" = "set:" ]
+}
+
+@test "transcribe: HF_TOKEN 設定時は警告せずそのまま渡す" {
+  stub_uv
+  export HF_TOKEN="hf_test"
+  local interim="$BATS_TEST_TMPDIR/interim"
+
+  run transcribe "$BATS_TEST_TMPDIR/meeting.wav" "$interim" "$BATS_TEST_TMPDIR/meeting-asr.srt"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[WARN]"* ]]
+  [ "$(cat "$interim/hf_token_seen")" = "set:hf_test" ]
+}
+
+@test "transcribe: set -u でも HF_TOKEN 未設定で落ちない" {
+  stub_uv
+  unset HF_TOKEN
+  local interim="$BATS_TEST_TMPDIR/interim"
+
+  run bash -u -c 'source "$1" && transcribe "$2" "$3" "$4"' _ \
+    "$BATS_TEST_DIRNAME/../run_audio_scribe.sh" \
+    "$BATS_TEST_TMPDIR/meeting.wav" "$interim" "$BATS_TEST_TMPDIR/meeting-asr.srt"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$interim/hf_token_seen")" = "unset" ]
 }
