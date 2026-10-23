@@ -194,6 +194,7 @@ function main() {
   rm -f "$list_file"
 
   local total="${#files[@]}"
+  log_info "Found ${total} .mov file(s) in total"
 
   if [[ "$total" -eq 0 ]]; then
     log_info "No .mov files found under the target directories"
@@ -207,7 +208,8 @@ function main() {
   for file in "${files[@]}"; do
     i=$((i + 1))
     log_info "[${i}/${total}] Processing: ${file}"
-    if bash "$CHILD_SCRIPT" "${CHILD_ARGS[@]}" "$file"; then
+    # bash 3.2 treats an empty array as unbound under set -u.
+    if bash "$CHILD_SCRIPT" ${CHILD_ARGS[@]+"${CHILD_ARGS[@]}"} "$file"; then
       succeeded=$((succeeded + 1))
       log_info "[${i}/${total}] Succeeded: ${file}"
     else

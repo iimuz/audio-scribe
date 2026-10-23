@@ -57,6 +57,7 @@ EOF
 
   run bash "$BIN_DIR/run_audio_scribe_batch.sh" "$b" "$a"
   [ "$status" -eq 0 ]
+  [[ "$output" == *"Found 3 .mov file(s) in total"* ]]
   [ "$(cat "$PROCESSED")" = "$(printf '%s\n' "$b/b1.mov" "$b/sub/b2.mov" "$a/a1.mov")" ]
   [[ "$output" == *"[3/3] Processing: $a/a1.mov"* ]]
   [[ "$output" == *"Summary: total=3 succeeded=3 failed=0"* ]]
