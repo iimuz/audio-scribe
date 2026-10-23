@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 
+bats_require_minimum_version 1.5.0
+
 setup() {
   source "$BATS_TEST_DIRNAME/../setup_launchd.sh"
 }
@@ -191,8 +193,7 @@ EOF
 
 @test "wrapper: AUDIO_SCRIBE_TARGET_DIR が未設定ならバッチを起動せずに失敗する" {
   setup_wrapper_fixture
-  run env -u AUDIO_SCRIBE_TARGET_DIR -u AUDIO_SCRIBE_AGENT bash "$WRAPPER"
-  [ "$status" -ne 0 ]
+  run ! env -u AUDIO_SCRIBE_TARGET_DIR -u AUDIO_SCRIBE_AGENT bash "$WRAPPER"
   [[ "$output" == *"AUDIO_SCRIBE_TARGET_DIR is not set"* ]]
   [ ! -e "$ARGS_FILE" ]
 }
