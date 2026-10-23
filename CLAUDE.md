@@ -118,16 +118,15 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
   bash / whisperx / node / ffmpeg の更新が TCC に影響しなくなる。
 - ラッパー `~/Library/Application Support/audio-scribe/bin/run.sh` は
   [launchd_wrapper.sh.template](launchd_wrapper.sh.template) から install ごとに描画され、
-  `cd <リポジトリ>` の後に
-  `exec <mise> exec -- bash -c 'IFS=: read -r -a parts <<<"${AUDIO_SCRIBE_TARGET_DIR:?...}"; ...;
-exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${dirs[@]}"'`
-  を実行する。`AUDIO_SCRIBE_TARGET_DIR` は PATH と同じく `:` で分割し、空の要素を捨てて、順序を保って
-  バッチの位置引数にする (`:` を含むパスは書けない)。パスは `printf '%q'` でシェル引用して埋め込む。
-  mise が .env とツール PATH を
-  解決するため、対象ディレクトリ (`AUDIO_SCRIBE_TARGET_DIR`) と LLM agent
-  (`AUDIO_SCRIBE_AGENT`、任意、既定 ollama) は実行時に .env から解決され、変更に再インストールは
-  不要。`${VAR:+...}` を意図的に引用符で囲まないのは、未設定時に空文字列の引数を渡さないため
-  であり、agent の値は ollama / claude のみで空白を含まないため単語分割は問題にならない。
+  `cd <リポジトリ>` の後に `exec <mise> exec -- bash -c '...'` を実行する。`bash -c` の本体は
+  `AUDIO_SCRIBE_TARGET_DIR` を `IFS=: read -r -a` で PATH と同じく `:` で分割し、空の要素を捨てて、順序を保って
+  `exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${dirs[@]}"`
+  の位置引数にする (`:` を含むパスは書けない)。パスは `printf '%q'` でシェル引用して埋め込む。
+  mise が .env とツール PATH を解決するため、対象ディレクトリ (`AUDIO_SCRIBE_TARGET_DIR`) と
+  LLM agent (`AUDIO_SCRIBE_AGENT`、任意、既定 ollama) は実行時に .env から解決され、変更に
+  再インストールは不要。`${VAR:+...}` を意図的に引用符で囲まないのは、未設定時に空文字列の
+  引数を渡さないためであり、agent の値は ollama / claude のみで空白を含まないため単語分割は
+  問題にならない。
   `IFS=:` を `read` の 1 回だけに効かせるのはこの単語分割のためで、シェル全体の IFS を `:` にすると
   `--agent` と値が 1 語になる。分割に `mapfile` / `readarray` を使わないのは、bash 3.2 でも動く
   構文に保つためである。
