@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 
+bats_require_minimum_version 1.5.0
+
 setup() {
   source "$BATS_TEST_DIRNAME/../setup_launchd.sh"
 }
@@ -129,4 +131,69 @@ setup() {
   chmod 755 "$BATS_TEST_TMPDIR/launcher"
   run launcher_needs_build "$BATS_TEST_TMPDIR/launcher" "/other/run.sh"
   [ "$status" -eq 0 ]
+}
+
+# Renders the wrapper against a fake mise that drops "exec --" and runs the
+# rest, and a fake batch script that writes each argument on its own line.
+setup_wrapper_fixture() {
+  local bin="$BATS_TEST_TMPDIR/bin"
+  REPO_DIR="$BATS_TEST_TMPDIR/repo"
+  ARGS_FILE="$REPO_DIR/args.txt"
+  WRAPPER="$BATS_TEST_TMPDIR/run.sh"
+  mkdir -p "$bin" "$REPO_DIR"
+  cat >"$bin/mise" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" = exec ] && [ "$2" = -- ] || exit 99
+shift 2
+exec "$@"
+EOF
+  cat >"$REPO_DIR/run_audio_scribe_batch.sh" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do printf '%s\n' "$arg"; done >args.txt
+EOF
+  chmod +x "$bin/mise" "$REPO_DIR/run_audio_scribe_batch.sh"
+  render_wrapper "$bin/mise" "$REPO_DIR" >"$WRAPPER"
+}
+
+@test "wrapper: 区切りの無い値を 1 つの引数として渡す" {
+  setup_wrapper_fixture
+  run env -u AUDIO_SCRIBE_AGENT AUDIO_SCRIBE_TARGET_DIR=/rec/2026-10 bash "$WRAPPER"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$ARGS_FILE")" = "/rec/2026-10" ]
+}
+
+@test "wrapper: : 区切りの値を順序を保って複数の引数として渡す" {
+  setup_wrapper_fixture
+  run env -u AUDIO_SCRIBE_AGENT AUDIO_SCRIBE_TARGET_DIR='/rec/2026 10:/rec/2026-09' bash "$WRAPPER"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$ARGS_FILE")" = "$(printf '%s\n' '/rec/2026 10' /rec/2026-09)" ]
+}
+
+@test "wrapper: 空の要素を捨てる" {
+  setup_wrapper_fixture
+  run env -u AUDIO_SCRIBE_AGENT AUDIO_SCRIBE_TARGET_DIR=':/a::/b:' bash "$WRAPPER"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$ARGS_FILE")" = "$(printf '%s\n' /a /b)" ]
+}
+
+@test "wrapper: 値が : だけならディレクトリを渡さずにバッチを起動する" {
+  setup_wrapper_fixture
+  run env -u AUDIO_SCRIBE_AGENT AUDIO_SCRIBE_TARGET_DIR=':' bash "$WRAPPER"
+  [ "$status" -eq 0 ]
+  [ -e "$ARGS_FILE" ]
+  [ ! -s "$ARGS_FILE" ]
+}
+
+@test "wrapper: AUDIO_SCRIBE_AGENT を --agent と値の 2 引数としてディレクトリの前に付ける" {
+  setup_wrapper_fixture
+  run env AUDIO_SCRIBE_AGENT=claude AUDIO_SCRIBE_TARGET_DIR=/a:/b bash "$WRAPPER"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$ARGS_FILE")" = "$(printf '%s\n' --agent claude /a /b)" ]
+}
+
+@test "wrapper: AUDIO_SCRIBE_TARGET_DIR が未設定ならバッチを起動せずに失敗する" {
+  setup_wrapper_fixture
+  run ! env -u AUDIO_SCRIBE_TARGET_DIR -u AUDIO_SCRIBE_AGENT bash "$WRAPPER"
+  [[ "$output" == *"AUDIO_SCRIBE_TARGET_DIR is not set"* ]]
+  [ ! -e "$ARGS_FILE" ]
 }

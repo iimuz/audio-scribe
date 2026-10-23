@@ -63,8 +63,9 @@ OPTIONS:
   -v, --verbose  Enable verbose output (set -x)
 
 ENV:
-  AUDIO_SCRIBE_TARGET_DIR      Directory processed at runtime (read from .env
-                               by mise exec on each scheduled run)
+  AUDIO_SCRIBE_TARGET_DIR      Directories processed at runtime, separated by
+                               ":" like PATH (read from .env by mise exec on
+                               each scheduled run)
   AUDIO_SCRIBE_AGENT           LLM agent: ollama or claude (read from .env by
                                mise exec on each scheduled run; default: ollama)
   AUDIO_SCRIBE_SCHEDULE_HOUR   Hour of the daily run, 0-23 (default: 3;

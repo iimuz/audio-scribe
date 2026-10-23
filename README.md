@@ -66,11 +66,14 @@ HF_TOKEN=hf_xxxxxxxxxxxxxxxx
 - `NUM_CTX`: ollama のコンテキスト長 (トークン、既定: 131072)
 
 ディレクトリ以下の `.mov` ファイルをまとめて処理する場合はバッチ用
-スクリプトを使います。1 件が失敗しても残りの処理を継続し、オプションと
-環境変数はそのまま run_audio_scribe.sh へ引き継がれます。
+スクリプトを使います。ディレクトリは複数渡せて、指定した順に走査します。
+ディレクトリでない引数 (存在しないパスなど) は警告を出して飛ばします。
+1 件が失敗しても残りの処理を継続し、オプションと環境変数はそのまま
+run_audio_scribe.sh へ引き継がれます。
 
 ```sh
 ./run_audio_scribe_batch.sh path/to/recordings
+./run_audio_scribe_batch.sh path/to/recordings/2026-09 path/to/recordings/2026-10
 ```
 
 出力ファイルは入力ファイルと同じディレクトリに生成されます。
@@ -92,8 +95,9 @@ launchd の起点は専用のランチャーバイナリ
 1. `.env` に設定を記載する:
 
    ```dotenv
-   # 処理対象ディレクトリ (必須。実行時に読み込まれる)
-   AUDIO_SCRIBE_TARGET_DIR=/path/to/recordings
+   # 処理対象ディレクトリ (必須。実行時に読み込まれる)。PATH と同じく : で区切って複数書ける
+   # (: を含むパスは書けない)
+   AUDIO_SCRIBE_TARGET_DIR=/path/to/recordings/2026-09:/path/to/recordings/2026-10
    # LLM agent (任意。既定は ollama。実行時に読み込まれるため変更に再インストールは不要)
    AUDIO_SCRIBE_AGENT=claude
    # 実行時刻 (任意。既定は 03:00。変更後は再インストールが必要)
@@ -149,6 +153,8 @@ launchd の起点は専用のランチャーバイナリ
 - `AUDIO_SCRIBE_TARGET_DIR` と `AUDIO_SCRIBE_AGENT` の変更は次回実行から反映されます (再インストール不要です)。
 - リポジトリや mise のパスが変わった場合は `mise run launchd:install` を再実行してください。
   ラッパーだけが再描画され、ランチャーは再ビルドされないため Full Disk Access は維持されます。
+- ラッパーのテンプレート (`launchd_wrapper.sh.template`) が変わる更新を取り込んだ場合も、
+  `mise run launchd:install` を再実行してラッパーを描画し直してください。ランチャーは再ビルドされません。
 - ランチャーを再ビルドすると code identity が変わり Full Disk Access が失効します。
   `launcher.c` を変更した場合はランチャーを削除してから install し直し、Full Disk Access を
   再付与してください (System Settings の一覧に古い項目が残っていれば削除して再追加する)。

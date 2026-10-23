@@ -5,4 +5,6 @@
 # so that moving the repository or mise never requires rebuilding the launcher.
 set -eu
 cd {{REPO_DIR}}
-exec {{MISE_BIN}} exec -- bash -c 'exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${AUDIO_SCRIBE_TARGET_DIR:?AUDIO_SCRIBE_TARGET_DIR is not set}"'
+# IFS=: is scoped to read alone so that the unquoted ${AUDIO_SCRIBE_AGENT:+...}
+# still splits on whitespace into "--agent" and its value.
+exec {{MISE_BIN}} exec -- bash -c 'IFS=: read -r -a parts <<<"${AUDIO_SCRIBE_TARGET_DIR:?AUDIO_SCRIBE_TARGET_DIR is not set}"; dirs=(); for d in "${parts[@]}"; do [[ -n "$d" ]] && dirs+=("$d"); done; exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${dirs[@]}"'

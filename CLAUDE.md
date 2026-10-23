@@ -118,13 +118,18 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
   bash / whisperx / node / ffmpeg の更新が TCC に影響しなくなる。
 - ラッパー `~/Library/Application Support/audio-scribe/bin/run.sh` は
   [launchd_wrapper.sh.template](launchd_wrapper.sh.template) から install ごとに描画され、
-  `cd <リポジトリ>` の後に
-  `exec <mise> exec -- bash -c 'exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${AUDIO_SCRIBE_TARGET_DIR:?...}"'`
-  を実行する。パスは `printf '%q'` でシェル引用して埋め込む。mise が .env とツール PATH を
-  解決するため、対象ディレクトリ (`AUDIO_SCRIBE_TARGET_DIR`) と LLM agent
-  (`AUDIO_SCRIBE_AGENT`、任意、既定 ollama) は実行時に .env から解決され、変更に再インストールは
-  不要。`${VAR:+...}` を意図的に引用符で囲まないのは、未設定時に空文字列の引数を渡さないため
-  であり、agent の値は ollama / claude のみで空白を含まないため単語分割は問題にならない。
+  `cd <リポジトリ>` の後に `exec <mise> exec -- bash -c '...'` を実行する。`bash -c` の本体は
+  `AUDIO_SCRIBE_TARGET_DIR` を `IFS=: read -r -a` で PATH と同じく `:` で分割し、空の要素を捨てて、順序を保って
+  `exec ./run_audio_scribe_batch.sh ${AUDIO_SCRIBE_AGENT:+--agent "$AUDIO_SCRIBE_AGENT"} "${dirs[@]}"`
+  の位置引数にする (`:` を含むパスは書けない)。パスは `printf '%q'` でシェル引用して埋め込む。
+  mise が .env とツール PATH を解決するため、対象ディレクトリ (`AUDIO_SCRIBE_TARGET_DIR`) と
+  LLM agent (`AUDIO_SCRIBE_AGENT`、任意、既定 ollama) は実行時に .env から解決され、変更に
+  再インストールは不要。`${VAR:+...}` を意図的に引用符で囲まないのは、未設定時に空文字列の
+  引数を渡さないためであり、agent の値は ollama / claude のみで空白を含まないため単語分割は
+  問題にならない。
+  `IFS=:` を `read` の 1 回だけに効かせるのはこの単語分割のためで、シェル全体の IFS を `:` にすると
+  `--agent` と値が 1 語になる。分割に `mapfile` / `readarray` を使わないのは、bash 3.2 でも動く
+  構文に保つためである。
 - ランチャーに埋め込むパスはラッパーの固定パスで `HOME` にしか依存しないため、リポジトリや mise
   のパス変更はラッパーの再描画で吸収され、ランチャーの再ビルドは不要である。再ビルドは
   「バイナリ不在」または「埋め込みパス不一致」のときだけ行う (`launcher_needs_build`)。
@@ -151,9 +156,11 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
   「パターンに一致したテキスト」として解釈するため、同じソースが bash のバージョンで
   異なる出力になる。`xml_escape` は 1 文字ずつの `case`、`replace_all` は needle での
   分割と連結で実装し、どのバージョンでも同一の結果にする。
-- テスト (`tests/setup_launchd.bats`) は描画・検証の純粋関数 (`render_plist`、`render_wrapper`、
-  `launcher_needs_build`、`validate_schedule_value`) のみを対象とし、
+- テスト (`tests/setup_launchd.bats`) は描画・検証の関数 (`render_plist`、`render_wrapper`、
+  `launcher_needs_build`、`validate_schedule_value`) と描画したラッパーの実行を対象とし、
   cc / codesign / launchctl / plutil / mise には依存しない (CI は ubuntu のため)。
+  ラッパーは `exec --` を捨てて残りを実行する偽の mise と、受け取った引数を書き出す偽のバッチで
+  実行し、`AUDIO_SCRIBE_TARGET_DIR` の分割を確かめる。
   `launcher_needs_build` はパス文字列を含むダミーファイルで検証する。
 
 ## データディレクトリ
