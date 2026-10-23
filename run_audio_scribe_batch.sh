@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Batch wrapper for run_audio_scribe.sh.
-# Recursively finds .mov files under a given directory and processes each
+# Recursively finds .mov files under the given directories and processes each
 # one sequentially by calling the sibling run_audio_scribe.sh.
 #
 # Required tools: bash, find, sort, mktemp
@@ -19,6 +19,11 @@ function log_info() {
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$SCRIPT_NAME] [INFO] $message" >&2
 }
 
+function log_warn() {
+  local message="$1"
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$SCRIPT_NAME] [WARN] $message" >&2
+}
+
 function log_err() {
   local message="$1"
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$SCRIPT_NAME] [ERROR] $message" >&2
@@ -31,10 +36,13 @@ function err() {
 
 function usage() {
   cat <<EOF
-Usage: ${SCRIPT_NAME} [OPTIONS] <directory>
+Usage: ${SCRIPT_NAME} [OPTIONS] <directory>...
 
-Recursively finds .mov files under <directory> and runs run_audio_scribe.sh
-on each one sequentially. Continues processing remaining files even if one fails.
+Recursively finds .mov files under each <directory> and runs run_audio_scribe.sh
+on each one sequentially. Directories are scanned in the order given, and the
+files in each directory in sorted order. All directories are scanned before any
+file is processed. Arguments that are not directories are skipped with a warning.
+Continues processing remaining files even if one fails.
 
 OPTIONS:
   -h, --help         Show this help message
@@ -50,6 +58,7 @@ ENV:
 
 EXAMPLES:
   ${SCRIPT_NAME} /path/to/recordings
+  ${SCRIPT_NAME} /path/to/recordings/2026-09 /path/to/recordings/2026-10
   ${SCRIPT_NAME} --verbose ./meetings
   ${SCRIPT_NAME} --agent claude --summarize-model haiku ./meetings
 EOF
@@ -69,10 +78,10 @@ function collect_mov_files() {
 }
 
 # Parses CLI arguments. Sets readonly globals:
-#   TARGET_DIR, VERBOSE, CHILD_ARGS
+#   TARGET_DIRS, VERBOSE, CHILD_ARGS
 function parse_args() {
   local verbose=0
-  local target_dir=""
+  local target_dirs=()
   local agent="" proofread_model="" summarize_model=""
 
   while [[ $# -gt 0 ]]; do
@@ -118,30 +127,25 @@ function parse_args() {
         exit 1
         ;;
       *)
-        if [[ -n "$target_dir" ]]; then
-          log_err "Too many positional arguments"
-          usage >&2
-          exit 1
-        fi
-        target_dir="$1"
+        target_dirs+=("$1")
         shift
         ;;
     esac
   done
 
-  if [[ -z "$target_dir" ]]; then
+  if [[ "${#target_dirs[@]}" -eq 0 ]]; then
     log_err "Missing required argument: <directory>"
     usage >&2
     exit 1
   fi
 
-  TARGET_DIR="$target_dir"
+  TARGET_DIRS=("${target_dirs[@]}")
   VERBOSE="$verbose"
   CHILD_ARGS=()
   [[ -n "$agent" ]] && CHILD_ARGS+=(--agent "$agent")
   [[ -n "$proofread_model" ]] && CHILD_ARGS+=(--proofread-model "$proofread_model")
   [[ -n "$summarize_model" ]] && CHILD_ARGS+=(--summarize-model "$summarize_model")
-  readonly TARGET_DIR VERBOSE CHILD_ARGS
+  readonly TARGET_DIRS VERBOSE CHILD_ARGS
 }
 
 function main() {
@@ -152,8 +156,18 @@ function main() {
     exit 1
   fi
 
-  if [[ ! -d "$TARGET_DIR" ]]; then
-    log_err "Target directory not found or not a directory: ${TARGET_DIR}"
+  local dirs=()
+  local dir
+  for dir in "${TARGET_DIRS[@]}"; do
+    if [[ -d "$dir" ]]; then
+      dirs+=("$dir")
+    else
+      log_warn "Not a directory, skipping: ${dir}"
+    fi
+  done
+
+  if [[ "${#dirs[@]}" -eq 0 ]]; then
+    log_err "None of the given paths is a directory"
     exit 1
   fi
 
@@ -163,26 +177,28 @@ function main() {
 
   local list_file
   list_file=$(mktemp)
-  if ! collect_mov_files "$TARGET_DIR" "$list_file"; then
-    rm -f "$list_file"
-    log_err "Failed to scan directory: ${TARGET_DIR}"
-    exit 1
-  fi
-
   local files=()
-  while IFS= read -r -d '' file; do
-    files+=("$file")
-  done <"$list_file"
+  for dir in "${dirs[@]}"; do
+    if ! collect_mov_files "$dir" "$list_file"; then
+      rm -f "$list_file"
+      log_err "Failed to scan directory: ${dir}"
+      exit 1
+    fi
+
+    local before="${#files[@]}"
+    while IFS= read -r -d '' file; do
+      files+=("$file")
+    done <"$list_file"
+    log_info "Found $((${#files[@]} - before)) .mov file(s) under ${dir}"
+  done
   rm -f "$list_file"
 
   local total="${#files[@]}"
 
   if [[ "$total" -eq 0 ]]; then
-    log_info "No .mov files found under ${TARGET_DIR}"
+    log_info "No .mov files found under the target directories"
     exit 0
   fi
-
-  log_info "Found ${total} .mov file(s) under ${TARGET_DIR}"
 
   local succeeded=0
   local failed_files=()
