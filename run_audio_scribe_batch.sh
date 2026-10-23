@@ -194,12 +194,13 @@ function main() {
   rm -f "$list_file"
 
   local total="${#files[@]}"
-  log_info "Found ${total} .mov file(s) in total"
 
   if [[ "$total" -eq 0 ]]; then
     log_info "No .mov files found under the target directories"
     exit 0
   fi
+
+  log_info "Found ${total} .mov file(s) in total"
 
   local succeeded=0
   local failed_files=()

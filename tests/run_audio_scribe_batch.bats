@@ -137,6 +137,7 @@ EOF
   run bash "$BIN_DIR/run_audio_scribe_batch.sh" "$a" "$b"
   [ "$status" -eq 0 ]
   [[ "$output" == *"No .mov files found under the target directories"* ]]
+  [[ "$output" != *"in total"* ]]
   [ ! -e "$PROCESSED" ]
 }
 
