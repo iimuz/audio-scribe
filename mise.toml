@@ -15,7 +15,7 @@ uv = "0.12.22"
 [env]
 _.file = ".env"
 # .env の値を参照するため、.env を読む行より後に置く。
-# GH_CONFIG_DIR_PERSONAL は、bot に切り替えたセッションが bot 用のディレクトリにする。
+# GH_CONFIG_DIR_PERSONAL は個人のアカウント用の値で、bot に切り替えたセッションは bot 用のディレクトリで上書きする。
 GH_CONFIG_DIR = "{{ get_env(name='GH_CONFIG_DIR_PERSONAL', default=env.GH_CONFIG_DIR | default(value='')) }}"
 
 [tasks.setup]
