@@ -12,6 +12,12 @@
   "labels": ["dependencies", "automerge"],
   "packageRules": [
     {
+      "description": "Disable Python version updates in requires-python: uv.lock cannot be regenerated until dependencies support the new Python, so humans bump requires-python, uv.lock and ruff target-version together",
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["requires-python"],
+      "enabled": false
+    },
+    {
       "description": "Skip minimum release age for pin and digest updates",
       "matchUpdateTypes": ["pin", "digest"],
       "minimumReleaseAge": "0 days"
