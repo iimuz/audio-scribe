@@ -9,6 +9,12 @@
   },
   "prConcurrentLimit": 10,
   "prHourlyLimit": 5,
+  "schedule": ["* * * * 6"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* * * * 6"],
+    "automerge": true
+  },
   "labels": ["dependencies", "automerge"],
   "packageRules": [
     {
