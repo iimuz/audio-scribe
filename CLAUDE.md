@@ -235,12 +235,11 @@ Renovate はこのリポジトリの workflow ではなく、別の private の�
 App の token で作られた PR では CI がトリガーされるため、PAT は使わない。
 設定は [renovate.json](renovate.json) にあり、Renovate は実行のたびにこれを読む。
 
-脆弱性の修正を除き、新しい PR を作るのは土曜 (UTC) の窓 (`schedule`) の中だけで、取り込まれていない PR は土曜以外にも更新される (Renovate の既定の
-`updateNotScheduled`)。
-更新の対象は mise ツール・npm devDependencies・GitHub Actions で、
-major / minor は種別 (github-actions / npm / mise / other) ごとにグルーピングし、
-patch / pin / digest は automerge する (branch protection の required check である
-status-check の通過が前提)。
+脆弱性の修正を除き、新しい PR を作るのは土曜 (UTC) の窓 (`schedule`) の中だけである。
+取り込まれていない PR は土曜以外にも更新される (Renovate の既定の `updateNotScheduled`)。
+更新の対象は mise ツール・npm devDependencies・GitHub Actions である。
+major / minor は種別 (github-actions / npm / mise / other) ごとにグルーピングする。
+patch / pin / digest は automerge する (branch protection の required check である status-check の通過が前提)。
 minimumReleaseAge は 14 days (pin / digest は 0 days)。
 既定で有効な pep621 manager により `pyproject.toml` と `uv.lock` も更新対象になる。
 ただし `requires-python` は対象から外している。
