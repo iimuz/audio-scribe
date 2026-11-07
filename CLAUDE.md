@@ -231,19 +231,23 @@ mise.toml の内容ハッシュから生成されるため個別設定は不要�
 
 ## Renovate
 
-[.github/workflows/renovate.yml](.github/workflows/renovate.yml) が self-hosted
-Renovate (renovatebot/github-action) を週次 (土曜 15:00 UTC) と
-workflow_dispatch (log_level を choice 入力で指定可能) で実行する。
-設定は [renovate.json](renovate.json) にあり、mise ツール・npm
-devDependencies・GitHub Actions を更新対象とする。major / minor は種別
-(github-actions / npm / mise / other) ごとにグルーピングし、patch / pin /
-digest は automerge する (branch protection の required check である
-status-check の通過が前提)。minimumReleaseAge は 14 days (pin / digest は
-0 days)。デフォルトの GITHUB_TOKEN では Renovate の PR で CI がトリガー
-されないため、repo scope (workflow 含む) の PAT をリポジトリ secret
-RENOVATE_TOKEN に登録して使う。既定で有効な pep621 manager により
-`pyproject.toml` と `uv.lock` も更新対象になる。lockFileMaintenance は
-有効にしていないため、間接依存は直接依存の更新時以外は動かない。
+Renovate はこのリポジトリの workflow ではなく、別の private のリポジトリから GitHub App の token で実行される。
+App の token で作られた PR では CI がトリガーされるため、PAT は使わない。
+設定は [renovate.json](renovate.json) にあり、Renovate は実行のたびにこれを読む。
+
+脆弱性の修正を除き、新しい PR を作るのは土曜 (UTC) の窓 (`schedule`) の中だけで、取り込まれていない PR は土曜以外にも更新される (Renovate の既定の
+`updateNotScheduled`)。
+更新の対象は mise ツール・npm devDependencies・GitHub Actions で、
+major / minor は種別 (github-actions / npm / mise / other) ごとにグルーピングし、
+patch / pin / digest は automerge する (branch protection の required check である
+status-check の通過が前提)。
+minimumReleaseAge は 14 days (pin / digest は 0 days)。
+既定で有効な pep621 manager により `pyproject.toml` と `uv.lock` も更新対象になる。
+ただし `requires-python` は対象から外している。
+依存が新しい Python に対応するまで `uv.lock` を再生成できないため、`requires-python`、`uv.lock`、ruff の target-version は人がまとめて上げる。
+
+lockFileMaintenance は有効で、土曜の窓に `uv.lock` と `pnpm-lock.yaml` を作り直し、status-check を通れば automerge する。
+lockFileMaintenance は上の階層の `schedule` を継がないため、`lockFileMaintenance` の中にも同じ窓を書いている。
 
 ## 注意
 
