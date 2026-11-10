@@ -212,6 +212,9 @@ staged files を引数として渡すのは cspell 辞書整列と test 以外�
 辞書整列は `mise run format:cspell` を無引数で呼び、test も無引数で `mise run test:sh`
 を呼ぶ (bats 全件実行)。新語は `.cspell.json` に追加する (フックがアルファベット順に整列する)。
 
+post-checkout は、新しく作った worktree に primary の `.env` を写す。worktree に `.env` が既にあれば写さない。
+Claude Code が作る worktree には、[.worktreeinclude](.worktreeinclude) が `.env` を写す。
+
 ## CI
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) が pull_request と main への
