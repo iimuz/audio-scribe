@@ -241,6 +241,8 @@ App の token で作られた PR では CI がトリガーされるため、PAT 
 脆弱性の修正を除き、新しい PR を作るのは土曜 (UTC) の窓 (`schedule`) の中だけである。
 取り込まれていない PR は土曜以外にも更新される (Renovate の既定の `updateNotScheduled`)。
 更新の対象は mise ツール・npm devDependencies・GitHub Actions である。
+mise の conda バックエンドのツールは、チャンネルを付けずに照会すると失敗するため、`registryUrls` で conda-forge を指定している。
+ffmpeg を `conda:ffmpeg` と明示するのは、短縮名だと mise の registry の順序で conda か asdf かが決まり、Renovate の参照先とずれ得るためである。
 major / minor は種別 (github-actions / npm / mise / other) ごとにグルーピングする。
 patch / pin / digest は automerge する (branch protection の required check である status-check の通過が前提)。
 minimumReleaseAge は 14 days (pin / digest は 0 days)。

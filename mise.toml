@@ -3,7 +3,8 @@ bats = "1.14.0"
 # macOS のシステム /bin/bash (3.2) では set -e が [[ ]] の失敗で停止せず、bats が
 # 最終位置でないアサーションの失敗を無視するため、テストを走らせる bash を固定する。
 "conda:bash" = "5.2.37"
-ffmpeg = "7.1.1"
+# 短縮名の ffmpeg は mise の registry の順序で conda か asdf になるため、Renovate の参照先と揃うよう明示する。
+"conda:ffmpeg" = "7.1.1"
 lefthook = "2.2.2"
 node = "24.22.1"
 pnpm = "12.15.0"
