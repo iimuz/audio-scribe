@@ -18,6 +18,12 @@
   "labels": ["dependencies", "automerge"],
   "packageRules": [
     {
+      "description": "Look up mise conda tools on conda-forge: the mise manager passes a bare package name without a channel, and the default anaconda.org registry needs <channel>/<name>, so lookups fail. mise itself installs conda tools from conda-forge by default",
+      "matchManagers": ["mise"],
+      "matchDatasources": ["conda"],
+      "registryUrls": ["https://api.anaconda.org/package/conda-forge/"]
+    },
+    {
       "description": "Disable Python version updates in requires-python: uv.lock cannot be regenerated until dependencies support the new Python, so humans bump requires-python, uv.lock and ruff target-version together",
       "matchManagers": ["pep621"],
       "matchDepTypes": ["requires-python"],
