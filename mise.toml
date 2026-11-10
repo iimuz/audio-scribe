@@ -4,6 +4,7 @@ bats = "1.14.0"
 # 最終位置でないアサーションの失敗を無視するため、テストを走らせる bash を固定する。
 "conda:bash" = "5.2.37"
 ffmpeg = "7.1.1"
+lefthook = "2.2.2"
 node = "24.22.1"
 pnpm = "12.14.0"
 ruff = "0.17.2"
@@ -14,9 +15,9 @@ uv = "0.13.5"
 
 [env]
 _.file = ".env"
-# .env の値を参照するため、.env を読む行より後に置く。
-# GH_CONFIG_DIR_PERSONAL は個人のアカウント用の値で、bot に切り替えたセッションは bot 用のディレクトリで上書きする。
-GH_CONFIG_DIR = "{{ get_env(name='GH_CONFIG_DIR_PERSONAL', default=env.GH_CONFIG_DIR | default(value='')) }}"
+# .env の値を参照し、かつ GH_CONFIG_DIR_AGENT を .env より優先するため、.env を読む行より後に置く。
+# GH_CONFIG_DIR_AGENT は bot に切り替えたセッションだけが持つ値で、無ければ .env か引き継いだ値を使う。
+GH_CONFIG_DIR = "{{ get_env(name='GH_CONFIG_DIR_AGENT', default=env.GH_CONFIG_DIR | default(value='')) }}"
 
 [tasks.setup]
 description = "依存パッケージの導入と git hook のインストール"
@@ -24,7 +25,7 @@ run = '''
 pnpm install
 # git worktree ではルートリポジトリ側の lefthook 設定を使うためスキップ
 if [ -d ".git" ]; then
-  pnpm exec lefthook install
+  lefthook install
 fi
 '''
 

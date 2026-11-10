@@ -34,7 +34,8 @@
     "subshell",
     "taplo",
     "whisperx",
-    "worktree"
+    "worktree",
+    "worktreeinclude"
   ],
   "dictionaries": [
     "bash",
