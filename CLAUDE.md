@@ -172,9 +172,9 @@ macOS では [setup_launchd.sh](setup_launchd.sh) が launchd agent
 ## ツールとコマンド
 
 ツールバージョンは [mise.toml](mise.toml) で固定
-(bash, bats, ffmpeg, node, pnpm, ruff, shellcheck, shfmt, taplo, uv)。
+(bash, bats, ffmpeg, lefthook, node, pnpm, ruff, shellcheck, shfmt, taplo, uv)。
 `.env` が mise 経由で読み込まれる。
-mise の配下の `GH_CONFIG_DIR` は、`GH_CONFIG_DIR_PERSONAL` があればその値 (bot に切り替えたセッションが bot 用のディレクトリにする)、無ければ `.env` か引き継いだ値になる。
+mise の配下の `GH_CONFIG_DIR` は、`GH_CONFIG_DIR_AGENT` があればその値 (bot に切り替えたセッションが bot 用のディレクトリにする)、無ければ `.env` か引き継いだ値になる。
 `uv` は whisperx の uv プロジェクトの実行に使用する。
 `bash` (`conda:bash`) を固定しているのは、macOS のシステム
 `/bin/bash` (3.2) では `set -e` が `[[ ]]` の失敗で停止せず、bats が最終位置でない
