@@ -243,14 +243,21 @@ App の token で作られた PR では CI がトリガーされるため、PAT 
 更新の対象は mise ツール・npm devDependencies・GitHub Actions である。
 mise の conda バックエンドのツールは、チャンネルを付けずに照会すると失敗するため、`registryUrls` で conda-forge を指定している。
 ffmpeg を `conda:ffmpeg` と明示するのは、短縮名だと mise の registry の順序で conda か asdf かが決まり、Renovate の参照先とずれ得るためである。
-major / minor は種別 (github-actions / npm / mise / other) ごとにグルーピングする。
-patch / pin / digest は automerge する (branch protection の required check である status-check の通過が前提)。
+major / minor / patch は種別 (github-actions / npm / mise / other) ごとにグルーピングする。
+major 以外 (minor / patch / pin / digest / pinDigest) は automerge する。
+マージは GitHub の auto-merge (`platformAutomerge`) が行い、ruleset の required check である status-check の通過を待つ。
+自動マージを決めるのは packageRules の最後の規則だけで、グループの規則は automerge を持たない。
+`automerge` ラベルは自動マージする PR (その規則と lockFileMaintenance) にだけ付け、全体の `labels` は `dependencies` だけにする。
+ラベルを見れば自動マージされる PR かどうかが分かるようにするためである。
+assignee には iimuz を付け、`assignAutomerge` は既定の false のままにする。
+assignee が付くのは自動マージしない PR (major) と、status check が失敗した自動マージの PR だけになり、人が見るべき PR だけが届く。
 minimumReleaseAge は 14 days (pin / digest は 0 days)。
 既定で有効な pep621 manager により `pyproject.toml` と `uv.lock` も更新対象になる。
 ただし `requires-python` は対象から外している。
 依存が新しい Python に対応するまで `uv.lock` を再生成できないため、`requires-python`、`uv.lock`、ruff の target-version は人がまとめて上げる。
 
 lockFileMaintenance は有効で、土曜の窓に `uv.lock` と `pnpm-lock.yaml` を作り直し、status-check を通れば automerge する。
+`automerge` ラベルは全体の `labels` に無いため、`lockFileMaintenance` の中に書いている。
 lockFileMaintenance は上の階層の `schedule` を継がないため、`lockFileMaintenance` の中にも同じ窓を書いている。
 
 ## 注意
