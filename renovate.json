@@ -15,9 +15,12 @@
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["* * * * 6"],
-    "automerge": true
+    "automerge": true,
+    "labels": ["dependencies", "automerge"]
   },
-  "labels": ["dependencies", "automerge"],
+  "labels": ["dependencies"],
+  "assignees": ["iimuz"],
+  "platformAutomerge": true,
   "packageRules": [
     {
       "description": "Look up mise conda tools on conda-forge: the mise manager passes a bare package name without a channel, and the default anaconda.org registry needs <channel>/<name>, so lookups fail. mise itself installs conda tools from conda-forge by default",
@@ -47,10 +50,9 @@
       "groupName": "other (minor)"
     },
     {
-      "description": "Group and automerge all other patch updates",
+      "description": "Group all other patch updates",
       "matchUpdateTypes": ["patch", "pin", "digest"],
-      "groupName": "other (patch)",
-      "automerge": true
+      "groupName": "other (patch)"
     },
     {
       "description": "Group GitHub Actions major updates",
@@ -65,11 +67,10 @@
       "groupName": "github-actions (minor)"
     },
     {
-      "description": "Group and automerge GitHub Actions patch updates",
+      "description": "Group GitHub Actions patch updates",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["patch", "pin", "digest"],
-      "groupName": "github-actions (patch)",
-      "automerge": true
+      "groupName": "github-actions (patch)"
     },
     {
       "description": "Group npm/Node.js major updates",
@@ -84,11 +85,10 @@
       "groupName": "npm (minor)"
     },
     {
-      "description": "Group and automerge npm/Node.js patch updates",
+      "description": "Group npm/Node.js patch updates",
       "matchManagers": ["npm"],
       "matchUpdateTypes": ["patch", "pin", "digest"],
-      "groupName": "npm (patch)",
-      "automerge": true
+      "groupName": "npm (patch)"
     },
     {
       "description": "Group mise major updates",
@@ -103,11 +103,16 @@
       "groupName": "mise (minor)"
     },
     {
-      "description": "Group and automerge mise patch updates",
+      "description": "Group mise patch updates",
       "matchManagers": ["mise"],
       "matchUpdateTypes": ["patch", "pin", "digest"],
-      "groupName": "mise (patch)",
-      "automerge": true
+      "groupName": "mise (patch)"
+    },
+    {
+      "description": "Automerge every update except major through GitHub auto-merge, which waits for the required status-check, and mark those pull requests with the automerge label. The global labels omit automerge so that the label appears only on pull requests that merge automatically. Placed last so that it applies on top of the group rules",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest"],
+      "automerge": true,
+      "labels": ["dependencies", "automerge"]
     }
   ]
 }
